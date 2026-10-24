@@ -18,6 +18,8 @@ def save_bundle(mesh: trimesh.Trimesh, directory: Path) -> None:
         faces=np_copy(mesh.faces),
         process=False,
     )
+    # The rim is a separate UV island that sits on the same edge. Weld it for printing.
+    geometry.merge_vertices()
     geometry.export(directory / "model.stl")
     _export_obj(mesh, directory)
     with zipfile.ZipFile(directory / "model-obj.zip", "w", compression=zipfile.ZIP_DEFLATED) as archive:

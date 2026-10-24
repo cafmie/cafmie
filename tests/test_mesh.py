@@ -24,6 +24,13 @@ def _disk(n=72):
     return rgb, depth, mask
 
 
+def _sealed(mesh):
+    sealed = trimesh.Trimesh(mesh.vertices.copy(), mesh.faces.copy(), process=False)
+    sealed.merge_vertices()
+    sealed.remove_unreferenced_vertices()
+    return sealed
+
+
 def test_volume_disk_is_a_closed_solid():
     rgb, depth, mask = _disk()
     mesh = build_mesh(
@@ -37,12 +44,15 @@ def test_volume_disk_is_a_closed_solid():
         thickness=0.05,
         smooth=0.4,
     )
-    assert mesh.is_watertight
-    assert mesh.volume > 0
+    sealed = _sealed(mesh)
+    assert sealed.is_watertight
+    assert sealed.volume > 0
     assert len(mesh.faces) > 100
     assert mesh.visual.uv.shape == (len(mesh.vertices), 2)
     front = mesh.triangles_center[:, 2] > 0.01
     assert mesh.face_normals[front, 2].mean() > 0.2
+    span = np.ptp(mesh.visual.uv[mesh.faces], axis=1)
+    assert float(span.max()) < 0.25
 
 
 def test_relief_has_a_flat_back_and_positive_thickness():
@@ -58,8 +68,9 @@ def test_relief_has_a_flat_back_and_positive_thickness():
         thickness=0.08,
         smooth=0.3,
     )
-    assert mesh.is_watertight
-    assert mesh.volume > 0
+    sealed = _sealed(mesh)
+    assert sealed.is_watertight
+    assert sealed.volume > 0
     assert mesh.vertices[:, 2].min() >= -1e-4
     assert mesh.vertices[:, 2].max() > 0.02
 

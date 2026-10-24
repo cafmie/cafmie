@@ -189,16 +189,41 @@ def _solid(
     texcoord = np.asarray(uvs, dtype=np.float32)
     front_faces = _quads(front_id)
     back_faces = _quads(back_id, reverse=True)
-    faces = [front_faces, back_faces]
-    if len(front_faces):
-        faces.append(_walls(points, front_faces, _front_to_back(front_id, back_id, len(points))))
-    stacked = [part for part in faces if len(part)]
+    # Low-pass the outline before the side wall is cut, so the rim follows one curve.
+    points = _smooth_outline(points, front_faces, radius=8)
+    points = _smooth_outline(points, front_faces, radius=8)
+    front_to_back = _front_to_back(front_id, back_id, len(points))
+    grid_count = len(points)
+    wall_faces, points, texcoord, wall_normals = _walls(
+        points, texcoord, front_faces, front_to_back, v_back
+    )
+    parts = [front_faces, back_faces, wall_faces]
+    stacked = [part for part in parts if len(part)]
     if not stacked:
         raise RuntimeError("メッシュを組めませんでした。被写体が小さすぎます。")
     face_array = np.vstack(stacked).astype(np.int32)
+    normals = _vertex_normals(valid, front_id, back_id, front_height, back_height, grid_count)
+    if len(wall_normals):
+        normals = np.vstack([normals, wall_normals])
 
-    points = _smooth_outline(points, front_faces, radius=8)
-    points = _smooth_outline(points, front_faces, radius=8)
+    # Drop faces that repeat a vertex. Keep tiny slivers: deleting them opens the rim.
+    degenerate = face_array[:, 0] == face_array[:, 1]
+    degenerate |= face_array[:, 1] == face_array[:, 2]
+    degenerate |= face_array[:, 0] == face_array[:, 2]
+    if degenerate.any():
+        face_array = face_array[~degenerate]
+        used = np.zeros(len(points), dtype=bool)
+        used[face_array] = True
+        remap = np.full(len(points), -1, dtype=np.int32)
+        remap[used] = np.arange(int(used.sum()), dtype=np.int32)
+        points = points[used]
+        texcoord = texcoord[used]
+        normals = normals[used]
+        face_array = remap[face_array]
+
+    if _volume_is_negative(points, face_array):
+        face_array = face_array[:, ::-1]
+        normals = -normals
 
     material = trimesh.visual.material.PBRMaterial(
         baseColorFactor=[255, 255, 255, 255],
@@ -209,14 +234,7 @@ def _solid(
     )
     visual = trimesh.visual.TextureVisuals(uv=texcoord, material=material)
     mesh = trimesh.Trimesh(vertices=points, faces=face_array, visual=visual, process=False)
-    # Drop faces that repeat a vertex. Keep tiny slivers: deleting them opens the rim.
-    degenerate = mesh.faces[:, 0] == mesh.faces[:, 1]
-    degenerate |= mesh.faces[:, 1] == mesh.faces[:, 2]
-    degenerate |= mesh.faces[:, 0] == mesh.faces[:, 2]
-    if degenerate.any():
-        mesh.update_faces(~degenerate)
-        mesh.remove_unreferenced_vertices()
-    _orient_outward(mesh)
+    mesh.vertex_normals = normals
     return mesh
 
 
@@ -256,26 +274,125 @@ def _front_to_back(front_id: np.ndarray, back_id: np.ndarray, count: int) -> np.
     return mapping
 
 
-def _walls(points: np.ndarray, front_faces: np.ndarray, front_to_back: np.ndarray) -> np.ndarray:
+def _walls(
+    points: np.ndarray,
+    texcoord: np.ndarray,
+    front_faces: np.ndarray,
+    front_to_back: np.ndarray,
+    v_back: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Stitch the rim with its own vertices so the side stays a solid color.
+
+    Sharing the front vertices would stretch the photograph across the wall,
+    which draws a bright jagged seam along the silhouette.
+    """
+
+    empty_faces = np.zeros((0, 3), dtype=np.int32)
+    empty_normals = np.zeros((0, 3), dtype=np.float32)
     edges = _directed_boundary(front_faces)
     if len(edges) == 0:
-        return np.zeros((0, 3), dtype=np.int32)
-    center = points.mean(axis=0)
+        return empty_faces, points, texcoord, empty_normals
+    center = points[::2].mean(axis=0)
+    clone: dict[int, int] = {}
+    extra_points: list[list[float]] = []
+    extra_uv: list[list[float]] = []
+    extra_normals: list[list[float]] = []
+
+    def rim(vertex: int) -> int:
+        cached = clone.get(vertex)
+        if cached is not None:
+            return cached
+        outward = points[vertex, :2] - center[:2]
+        length = float(np.linalg.norm(outward))
+        if length < 1e-8:
+            outward = np.array([0.0, 1.0], dtype=np.float32)
+        else:
+            outward = outward / length
+        normal = np.array([outward[0], outward[1], 0.18], dtype=np.float32)
+        normal /= float(np.linalg.norm(normal))
+        clone[vertex] = len(points) + len(extra_points)
+        extra_points.append(points[vertex].tolist())
+        extra_uv.append([0.5, v_back])
+        extra_normals.append(normal.tolist())
+        return clone[vertex]
+
     faces: list[tuple[int, int, int]] = []
     for start, end in edges.tolist():
         back_start = int(front_to_back[start])
         back_end = int(front_to_back[end])
         if back_start < 0 or back_end < 0:
             continue
-        for tri in ((start, end, back_end), (start, back_end, back_start)):
-            normal = np.cross(points[tri[1]] - points[tri[0]], points[tri[2]] - points[tri[0]])
-            midpoint = (points[tri[0]] + points[tri[1]] + points[tri[2]]) / 3.0
+        rim_start = rim(int(start))
+        rim_end = rim(int(end))
+        for tri in ((rim_start, rim_end, back_end), (rim_start, back_end, back_start)):
+            corners = [points[start] if index == rim_start else points[end] if index == rim_end else points[index] for index in tri]
+            normal = np.cross(corners[1] - corners[0], corners[2] - corners[0])
+            midpoint = (corners[0] + corners[1] + corners[2]) / 3.0
             if float(np.dot(normal, midpoint - center)) < 0.0:
                 tri = (tri[0], tri[2], tri[1])
             faces.append(tri)
     if not faces:
-        return np.zeros((0, 3), dtype=np.int32)
-    return np.asarray(faces, dtype=np.int32)
+        return empty_faces, points, texcoord, empty_normals
+    points = np.vstack([points, np.asarray(extra_points, dtype=np.float32)])
+    texcoord = np.vstack([texcoord, np.asarray(extra_uv, dtype=np.float32)])
+    return (
+        np.asarray(faces, dtype=np.int32),
+        points,
+        texcoord,
+        np.asarray(extra_normals, dtype=np.float32),
+    )
+
+
+def _vertex_normals(
+    valid: np.ndarray,
+    front_id: np.ndarray,
+    back_id: np.ndarray,
+    front_height: np.ndarray,
+    back_height: np.ndarray,
+    count: int,
+) -> np.ndarray:
+    """Normals from the height field, so grid triangles do not stripe the light."""
+
+    normals = np.zeros((count, 3), dtype=np.float32)
+    normals[:, 2] = 1.0
+    front = _height_normals(_filled(front_height, valid), facing=1.0)
+    back = _height_normals(_filled(back_height, valid), facing=-1.0)
+    known = front_id >= 0
+    normals[front_id[known]] = front[known]
+    normals[back_id[known]] = back[known]
+    return normals
+
+
+def _filled(height: np.ndarray, valid: np.ndarray) -> np.ndarray:
+    filled = height.astype(np.float64, copy=True)
+    if valid.all() or not valid.any():
+        return filled
+    _, (near_y, near_x) = distance_transform_edt(~valid, return_indices=True)
+    missing = ~valid
+    filled[missing] = filled[near_y[missing], near_x[missing]]
+    return filled
+
+
+def _height_normals(height: np.ndarray, *, facing: float) -> np.ndarray:
+    rows, cols = height.shape
+    long_side = float(max(rows, cols))
+    dx = (cols / long_side) / max(cols - 1, 1)
+    dy = (rows / long_side) / max(rows - 1, 1)
+    gradient_y, gradient_x = np.gradient(height)
+    dzdx = gradient_x / dx
+    dzdy = -gradient_y / dy
+    if facing > 0:
+        normals = np.stack([-dzdx, -dzdy, np.ones_like(dzdx)], axis=-1)
+    else:
+        normals = np.stack([dzdx, dzdy, -np.ones_like(dzdx)], axis=-1)
+    normals /= np.linalg.norm(normals, axis=-1, keepdims=True) + 1e-12
+    return normals.astype(np.float32)
+
+
+def _volume_is_negative(points: np.ndarray, faces: np.ndarray) -> bool:
+    probe = trimesh.Trimesh(vertices=points, faces=faces, process=False)
+    probe.merge_vertices()
+    return bool(probe.is_watertight and probe.volume < 0)
 
 
 def _directed_boundary(faces: np.ndarray) -> np.ndarray:
@@ -333,7 +450,3 @@ def _smooth_outline(points: np.ndarray, front_faces: np.ndarray, radius: int = 5
     return points
 
 
-def _orient_outward(mesh: trimesh.Trimesh) -> None:
-    if not mesh.is_watertight or mesh.volume >= 0:
-        return
-    mesh.invert()
