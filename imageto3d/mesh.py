@@ -68,7 +68,7 @@ def build_mesh(
         back_height = -(dome * float(inflate) * 0.92) * subject
         # The silhouette is where front and back meet. A hair of thickness keeps
         # the side wall from collapsing into a hole.
-        rim = np.float32(max(0.002, 0.012 * subject))
+        rim = np.float32(max(0.0015, 0.004 * subject))
         front_height = np.where(boundary, np.maximum(front_height, rim), front_height)
         back_height = np.where(boundary, np.minimum(back_height, -rim), back_height)
     else:
@@ -197,15 +197,8 @@ def _solid(
         raise RuntimeError("メッシュを組めませんでした。被写体が小さすぎます。")
     face_array = np.vstack(stacked).astype(np.int32)
 
-    seam = np.unique(front_id[boundary])
-    seam = seam[seam >= 0]
-    points = _smooth_seam(points, face_array, seam, rounds=14)
-    paired = _front_to_back(front_id, back_id, len(points))
-    for front_index in seam.tolist():
-        back_index = int(paired[int(front_index)])
-        if back_index >= 0:
-            points[back_index, 0] = points[int(front_index), 0]
-            points[back_index, 1] = points[int(front_index), 1]
+    points = _smooth_outline(points, front_faces, radius=8)
+    points = _smooth_outline(points, front_faces, radius=8)
 
     material = trimesh.visual.material.PBRMaterial(
         baseColorFactor=[255, 255, 255, 255],
@@ -300,29 +293,44 @@ def _directed_boundary(faces: np.ndarray) -> np.ndarray:
     return edges[starts[single]].astype(np.int32)
 
 
-def _smooth_seam(points: np.ndarray, faces: np.ndarray, seam_ids: np.ndarray, rounds: int = 3) -> np.ndarray:
-    seam_ids = np.asarray(seam_ids, dtype=np.int64)
-    seam_ids = seam_ids[(seam_ids >= 0) & (seam_ids < len(points))]
-    if len(seam_ids) < 3 or len(faces) == 0:
+def _smooth_outline(points: np.ndarray, front_faces: np.ndarray, radius: int = 5) -> np.ndarray:
+    """Low-pass the real silhouette so pixel stairs stop catching the light."""
+
+    if len(front_faces) == 0 or radius < 1:
         return points
-    seam_set = set(seam_ids.tolist())
-    neighbors: dict[int, set[int]] = {int(index): set() for index in seam_ids.tolist()}
-    for a, b, c in faces.tolist():
-        for start, end in ((a, b), (b, c), (c, a)):
-            if start in seam_set and end in seam_set:
-                neighbors[start].add(end)
-                neighbors[end].add(start)
-    updated = points.copy()
-    for _ in range(rounds):
-        nxt = updated.copy()
-        for index, adjacent in neighbors.items():
-            if not adjacent:
-                continue
-            average = updated[list(adjacent), :2].mean(axis=0)
-            nxt[index, 0] = updated[index, 0] * 0.55 + average[0] * 0.45
-            nxt[index, 1] = updated[index, 1] * 0.55 + average[1] * 0.45
-        updated = nxt
-    return updated
+    edges = _directed_boundary(front_faces)
+    if len(edges) < 8:
+        return points
+    successor: dict[int, int] = {}
+    for start, end in edges.tolist():
+        successor[int(start)] = int(end)
+    unused = set(successor)
+    while unused:
+        start = unused.pop()
+        loop = [start]
+        current = successor.get(start)
+        while current is not None and current in unused:
+            unused.discard(current)
+            loop.append(current)
+            current = successor.get(current)
+        count = len(loop)
+        if count < radius * 2 + 3:
+            continue
+        indices = np.asarray(loop, dtype=np.int64)
+        xy = points[indices, :2]
+        smoothed = np.empty_like(xy)
+        for index in range(count):
+            samples = [xy[(index + offset) % count] for offset in range(-radius, radius + 1)]
+            smoothed[index] = np.mean(samples, axis=0)
+        mixed = xy * 0.2 + smoothed * 0.8
+        points[indices, 0] = mixed[:, 0]
+        points[indices, 1] = mixed[:, 1]
+        # The back vertex is stored immediately after its front partner.
+        back = indices + 1
+        keep = back < len(points)
+        points[back[keep], 0] = points[indices[keep], 0]
+        points[back[keep], 1] = points[indices[keep], 1]
+    return points
 
 
 def _orient_outward(mesh: trimesh.Trimesh) -> None:
