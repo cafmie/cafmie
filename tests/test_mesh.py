@@ -1,4 +1,6 @@
 import io
+import json
+import struct
 
 import numpy as np
 import trimesh
@@ -90,6 +92,10 @@ def test_bundle_writes_obj_package(tmp_path):
     assert "map_Kd texture.png" in mtl
     assert (tmp_path / "texture.png").is_file()
     assert (tmp_path / "model-obj.zip").is_file()
+    glb = (tmp_path / "model.glb").read_bytes()
+    json_length = struct.unpack_from("<I", glb, 12)[0]
+    document = json.loads(glb[20 : 20 + json_length])
+    assert "NORMAL" in document["meshes"][0]["primitives"][0]["attributes"]
     with Image.open(tmp_path / "texture.png") as image:
         assert image.mode == "RGB"
         assert image.size[0] > 8

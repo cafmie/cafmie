@@ -10,6 +10,8 @@ import trimesh
 
 def save_bundle(mesh: trimesh.Trimesh, directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
+    # Touching the normals caches them so the GLB is smooth-shaded.
+    mesh.vertex_normals
     mesh.export(directory / "model.glb")
     geometry = trimesh.Trimesh(
         vertices=np_copy(mesh.vertices),

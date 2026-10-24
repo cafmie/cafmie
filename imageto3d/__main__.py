@@ -117,6 +117,7 @@ def _convert(args) -> int:
     destination = args.output
     destination.parent.mkdir(parents=True, exist_ok=True)
     if suffix == ".glb":
+        result.mesh.vertex_normals
         result.mesh.export(destination)
     elif suffix == ".stl":
         import trimesh

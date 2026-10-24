@@ -199,7 +199,7 @@ def _solid(
 
     seam = np.unique(front_id[boundary])
     seam = seam[seam >= 0]
-    points = _smooth_seam(points, face_array, seam, rounds=8)
+    points = _smooth_seam(points, face_array, seam, rounds=14)
     paired = _front_to_back(front_id, back_id, len(points))
     for front_index in seam.tolist():
         back_index = int(paired[int(front_index)])
