@@ -29,6 +29,8 @@ def test_health_and_index():
         page = client.get("/")
         assert page.status_code == 200
         assert "画像から3D" in page.text
+        assert 'type="module"' in page.text
+        assert "model-viewer.min.js" in page.text
         assert client.get("/style.css").status_code == 200
         assert client.get("/app.js").status_code == 200
         assert client.get("/vendor/model-viewer.min.js").status_code == 200
