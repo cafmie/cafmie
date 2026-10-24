@@ -1,0 +1,28 @@
+[project]
+name = "imageto3d"
+version = "0.1.0"
+description = "Local tool that turns a single image into a textured 3D model."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "pillow>=10",
+  "scipy>=1.11",
+  "onnxruntime>=1.17",
+  "trimesh>=4.4",
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
+  "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+imageto3d = "imageto3d.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["imageto3d*"]
+
+[tool.setuptools.package-data]
+imageto3d = ["web/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
