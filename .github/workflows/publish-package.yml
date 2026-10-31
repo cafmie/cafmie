@@ -44,5 +44,5 @@ jobs:
         run: |
           gh api --method PATCH \
             -H "Accept: application/vnd.github+json" \
-            "/users/cafmie/packages/docker/imageto3d" \
+            "/users/cafmie/packages/container/imageto3d" \
             -f visibility=public
