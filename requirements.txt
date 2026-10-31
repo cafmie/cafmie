@@ -1,3 +1,5 @@
+# CPU 版の実行環境です。NVIDIA GPU で推定するときは、このファイルの代わりに
+# requirements-gpu.txt を入れてください（onnxruntime と onnxruntime-gpu は共存できません）。
 numpy>=1.26
 pillow>=10
 scipy>=1.11

@@ -24,23 +24,31 @@ _ID = re.compile(r"^[a-f0-9]{32}$")
 _FILE = re.compile(r"^(model\.(glb|stl|obj|mtl)|model-obj\.zip|texture\.png|depth\.png|mask\.png)$")
 
 _state_lock = threading.Lock()
-_state = {"state": "checking", "message": "", "ready": False}
+_state = {"state": "checking", "message": "", "ready": False, "device": None}
 
 
-def _set_state(state: str, message: str = "") -> None:
+def _set_state(state: str, message: str = "", device=None) -> None:
     with _state_lock:
         _state["state"] = state
         _state["message"] = message
         _state["ready"] = state == "ready"
+        if state == "ready":
+            _state["device"] = device
+        elif state == "error":
+            _state["device"] = None
 
 
 def _snapshot() -> dict:
     with _state_lock:
+        device = _state["device"]
+        ready_label = "このPCの中で処理できます"
+        if device is not None:
+            ready_label = "GPUで処理します" if device.gpu else "CPUで処理します"
         labels = {
             "checking": "状態を確認しています",
             "downloading": "初回のモデルをダウンロードしています",
             "loading": "モデルを読み込んでいます",
-            "ready": "このPCの中で処理できます",
+            "ready": ready_label,
             "error": "モデルの準備に失敗しました",
         }
         return {
@@ -48,6 +56,8 @@ def _snapshot() -> dict:
             "ready": _state["ready"],
             "message": _state["message"],
             "label": labels.get(_state["state"], _state["state"]),
+            "device": None if device is None else device.provider,
+            "gpu": bool(device and device.gpu),
         }
 
 
@@ -63,8 +73,11 @@ def prepare_models() -> None:
 
         segment.get_session()
         depth.get_session()
-        _set_state("ready")
-        logger.info("models ready")
+        from .device import current
+
+        device = current()
+        _set_state("ready", device=device)
+        logger.info("models ready on %s", device.label if device else "unknown")
     except Exception as error:
         logger.exception("model preparation failed")
         _set_state("error", str(error))

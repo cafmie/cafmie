@@ -1,7 +1,7 @@
 [project]
 name = "imageto3d"
 version = "0.1.0"
-description = "Local tool that turns a single image into a textured 3D model."
+description = "Local tool that turns a single image into a textured 3D model, using a GPU when one is available."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -14,6 +14,9 @@ dependencies = [
   "uvicorn>=0.27",
   "python-multipart>=0.0.9",
 ]
+
+[project.optional-dependencies]
+gpu = ["onnxruntime-gpu>=1.17"]
 
 [project.scripts]
 imageto3d = "imageto3d.__main__:main"

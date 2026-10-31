@@ -1,6 +1,6 @@
 # 画像から3D
 
-写真を1枚渡すと、このPCの中だけで立体の3Dモデルにします。ブラウザでプレビューして、GLB・STL・OBJ で保存できます。GPUは要りません。
+写真を1枚渡すと、このPCの中だけで立体の3Dモデルにします。ブラウザでプレビューして、GLB・STL・OBJ で保存できます。深度の推定と背景の切り抜きは、NVIDIA GPU があるときは CUDA で計算します。
 
 処理はローカルです。画像を外部のAPIには送りません。初回起動時だけ、深度推定と背景切り抜きのモデル（合計およそ140MB）をダウンロードします。
 
@@ -11,9 +11,18 @@ Python 3.10 以上が必要です。
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-gpu.txt
 python -m imageto3d download-models
 ```
+
+GPU 用のパッケージは `onnxruntime-gpu` です。さきに CPU 版の `onnxruntime` を入れているときは、先に外してから入れ直します。
+
+```bash
+pip uninstall -y onnxruntime
+pip install -r requirements-gpu.txt
+```
+
+NVIDIA ドライバが入っている必要があります。CUDA のライブラリは `onnxruntime-gpu` の依存として入ります。GPU が無い PC では `pip install -r requirements.txt` で CPU のまま動きます。使う装置を固定するときは `--device cuda` または `--device cpu` を付けます。`--device cuda` で GPU が無いときは起動時に失敗します。
 
 モデルは `models/` に保存されます。置き場所を変えるときは環境変数 `IMAGETO3D_MODELS` を指定します。
 
@@ -62,7 +71,9 @@ python -m imageto3d convert photo.png -o photo.zip
 2. 奥行きを推定する（Depth Anything V2 Small）
 3. 輪郭をドーム状にふくらませ、手前に奥行きを足して閉じたメッシュにする
 
-見えていない裏側の形は推定しません。裏側は輪郭から作ったなめらかな殻で、色は被写体の代表色です。複数視点からの計測や、生成モデルによる完全な立体復元ではありません。CPUでも1枚あたり数秒程度で終わります。
+見えていない裏側の形は推定しません。裏側は輪郭から作ったなめらかな殻で、色は被写体の代表色です。複数視点からの計測や、生成モデルによる完全な立体復元ではありません。
+
+画面右上に「GPUで処理します」と出ているときは、深度と切り抜きが CUDA 上です。メッシュを組む処理は CPU のままです。GPU が使えないときは「CPUで処理します」になり、同じ結果を CPU で計算します。
 
 生成ファイルは `outputs/` に置かれ、24時間より古いものは起動時に消します。`IMAGETO3D_OUTPUTS` で場所を変えられます。
 

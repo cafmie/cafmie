@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -16,16 +17,23 @@ from .sample_art import write_sample
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="imageto3d",
-        description="画像1枚から、このPCの中だけで3Dモデルを作ります。",
+        description="画像1枚から、このPCの中だけで3Dモデルを作ります。推定はGPUを優先します。",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--device",
+        choices=("auto", "cuda", "cpu"),
+        default="auto",
+        help="推定に使う装置。auto は GPU があれば CUDA、無ければ CPU",
+    )
 
-    serve = sub.add_parser("serve", help="ブラウザで使えるローカルアプリを起動する")
+    serve = sub.add_parser("serve", parents=[common], help="ブラウザで使えるローカルアプリを起動する")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=7860)
     serve.add_argument("--open", action="store_true", help="起動後にブラウザを開く")
 
-    convert = sub.add_parser("convert", help="画像を3Dファイルに変換する")
+    convert = sub.add_parser("convert", parents=[common], help="画像を3Dファイルに変換する")
     convert.add_argument("image", type=Path)
     convert.add_argument("-o", "--output", type=Path, required=True, help=".glb / .stl / .obj / .zip")
     convert.add_argument("--mode", choices=("volume", "relief"), default="volume")
@@ -39,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("download-models", help="深度モデルと切り抜きモデルを取得する")
 
     args = parser.parse_args(argv)
+    if getattr(args, "device", None):
+        os.environ["IMAGETO3D_DEVICE"] = args.device
     if args.command == "download-models":
         return _download()
     if args.command == "serve":
@@ -135,6 +145,11 @@ def _convert(args) -> int:
             print(f"マテリアル: {folder / 'model.mtl'}")
     if result.notice:
         print(result.notice)
+    from .device import current
+
+    device = current()
+    if device is not None:
+        print(f"推定: {device.label}")
     print(
         f"保存しました: {destination}（頂点 {result.vertices:,} / 面 {result.faces:,} / {result.elapsed_s:.1f}秒）"
     )

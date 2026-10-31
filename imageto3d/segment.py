@@ -8,6 +8,7 @@ import numpy as np
 import onnxruntime as ort
 from PIL import Image
 
+from .device import open_session
 from .download import MODELS, ensure_models
 
 _session: ort.InferenceSession | None = None
@@ -24,15 +25,7 @@ def get_session() -> ort.InferenceSession:
         if _session is None:
             ensure_models()
             path = next(model.path() for model in MODELS if model.key == "cutout")
-            options = ort.SessionOptions()
-            options.intra_op_num_threads = 0
-            options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-            options.log_severity_level = 3
-            _session = ort.InferenceSession(
-                str(path),
-                sess_options=options,
-                providers=["CPUExecutionProvider"],
-            )
+            _session, _ = open_session(str(path))
     return _session
 
 

@@ -35,7 +35,10 @@ def test_health_and_index():
         assert client.get("/app.js").status_code == 200
         assert client.get("/vendor/model-viewer.min.js").status_code == 200
         status = client.get("/api/status")
-        assert status.json()["ready"] is True
+        body = status.json()
+        assert body["ready"] is True
+        assert body["gpu"] is False
+        assert body["device"] is None
 
 
 def test_reconstruct_endpoint_writes_a_viewable_model(monkeypatch):
