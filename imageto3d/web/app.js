@@ -14,6 +14,8 @@ const empty = document.querySelector("#empty");
 const viewer = document.querySelector("#viewer");
 const modeHint = document.querySelector("#modeHint");
 const thicknessField = document.querySelector("#thicknessField");
+const installText = document.querySelector("#installText");
+const installButton = document.querySelector("#installButton");
 
 const hints = {
   volume: "表に写真の凹凸、裏になめらかな厚みを付けた立体です。",
@@ -197,4 +199,38 @@ function showModel(data) {
   document.querySelector("#maskThumb").src = `${data.mask}?t=${stamp}`;
 }
 
+function paintInstall(data) {
+  installText.textContent = data.message;
+  installButton.textContent = data.installed ? "インストールし直す" : "このPCにインストール";
+}
+
+async function refreshInstall() {
+  try {
+    const response = await fetch("/api/install");
+    if (!response.ok) return;
+    paintInstall(await response.json());
+  } catch {
+    installText.textContent = "インストール状態を確認できません";
+  }
+}
+
+installButton.addEventListener("click", async () => {
+  installButton.disabled = true;
+  installText.textContent = "インストールしています";
+  try {
+    const response = await fetch("/api/install", { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = data.detail;
+      throw new Error(typeof detail === "string" ? detail : "インストールに失敗しました");
+    }
+    paintInstall(data);
+  } catch (error) {
+    installText.textContent = error.message || "インストールに失敗しました";
+  } finally {
+    installButton.disabled = false;
+  }
+});
+
 refreshStatus();
+refreshInstall();

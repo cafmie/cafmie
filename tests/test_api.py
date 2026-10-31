@@ -39,6 +39,23 @@ def test_health_and_index():
         assert body["ready"] is True
         assert body["gpu"] is False
         assert body["device"] is None
+        assert 'id="installButton"' in page.text
+        install = client.get("/api/install")
+        assert install.status_code == 200
+        assert "installed" in install.json()
+        assert "message" in install.json()
+
+
+def test_install_endpoint_uses_the_installer(monkeypatch):
+    monkeypatch.setattr(
+        "imageto3d.installer.install",
+        lambda: {"installed": True, "message": "入れました", "notes": []},
+    )
+    with TestClient(app) as client:
+        response = client.post("/api/install")
+    assert response.status_code == 200
+    assert response.json()["installed"] is True
+    assert response.json()["message"] == "入れました"
 
 
 def test_reconstruct_endpoint_writes_a_viewable_model(monkeypatch):
