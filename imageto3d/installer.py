@@ -68,10 +68,22 @@ def _refresh_menu() -> None:
 
 
 def _writable_path_dir() -> Path | None:
-    home_bin = (Path.home() / ".local" / "bin").resolve()
+    """A conventional bin directory already on PATH, never a toolchain folder."""
+    home = Path.home()
+    home_bin = (home / ".local" / "bin").resolve()
+    on_path: set[Path] = set()
     for folder in _path_dirs():
         try:
-            if folder.is_dir() and os.access(folder, os.W_OK) and folder.resolve() != home_bin:
+            if folder.is_dir():
+                on_path.add(folder.resolve())
+        except OSError:
+            continue
+    for folder in (Path("/usr/local/bin"), home / "bin", Path("/usr/bin")):
+        try:
+            resolved = folder.resolve()
+            if resolved == home_bin or resolved not in on_path:
+                continue
+            if folder.is_dir() and os.access(folder, os.W_OK):
                 return folder
         except OSError:
             continue

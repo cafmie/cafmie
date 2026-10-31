@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from imageto3d.__main__ import main
@@ -77,3 +78,22 @@ def test_install_registers_the_menu_and_command(monkeypatch, tmp_path):
     assert bashrc.count("# >>> imageto3d >>>") == (tmp_path / ".bashrc").read_text(encoding="utf-8").count(
         "# >>> imageto3d >>>"
     )
+
+
+def test_install_skips_toolchain_directories(monkeypatch, tmp_path):
+    from imageto3d.installer import install
+
+    home = tmp_path / "home"
+    cargo = tmp_path / "cargo" / "bin"
+    cargo.mkdir(parents=True)
+    user_bin = home / "bin"
+    user_bin.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.setenv("PATH", f"{cargo}{os.pathsep}{user_bin}")
+    monkeypatch.setattr("imageto3d.installer.shutil.which", lambda name: None)
+
+    install()
+
+    assert not (cargo / "imageto3d").exists()
+    assert (user_bin / "imageto3d").is_symlink()
+    assert (home / ".local" / "bin" / "imageto3d").is_symlink()
