@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "imageto3d"
 version = "0.1.0"
@@ -17,15 +21,19 @@ dependencies = [
 
 [project.optional-dependencies]
 gpu = ["onnxruntime-gpu>=1.17"]
+package = ["build>=1.2"]
 
 [project.scripts]
 imageto3d = "imageto3d.__main__:main"
+
+[tool.setuptools]
+include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["imageto3d*"]
 
 [tool.setuptools.package-data]
-imageto3d = ["web/**/*"]
+imageto3d = ["web/*", "web/*/*", "web/*/*/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

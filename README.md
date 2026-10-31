@@ -24,7 +24,34 @@ pip install -r requirements-gpu.txt
 
 NVIDIA ドライバが入っている必要があります。CUDA のライブラリは `onnxruntime-gpu` の依存として入ります。GPU が無い PC では `pip install -r requirements.txt` で CPU のまま動きます。使う装置を固定するときは `--device cuda` または `--device cpu` を付けます。`--device cuda` で GPU が無いときは起動時に失敗します。
 
-モデルは `models/` に保存されます。置き場所を変えるときは環境変数 `IMAGETO3D_MODELS` を指定します。
+モデルは、このリポジトリから起動しているときは `models/` に保存されます。パッケージから入れたときは `~/.local/share/imageto3d/models` です。置き場所を変えるときは環境変数 `IMAGETO3D_MODELS` を指定します。
+
+## パッケージ
+
+配布用のファイルは、このリポジトリで次を実行すると `dist/` にできます。`build` が無いときは先に `pip install build` します。
+
+```bash
+python -m imageto3d package
+```
+
+できるものは三つです。
+
+- `imageto3d-0.1.0-py3-none-any.whl` … `pip install` 用
+- `imageto3d-0.1.0.tar.gz` … ソース
+- `imageto3d_0.1.0-1_amd64.deb` … Debian / Ubuntu 24.04（Python 3.12、64bit）向け
+
+`.deb` には CPU 版の依存ライブラリも入っています。入れるPCがオフラインでも、次でインストールできます。
+
+```bash
+sudo dpkg -i dist/imageto3d_0.1.0-1_amd64.deb
+```
+
+メニューの「画像から3D」と `/usr/bin/imageto3d` が入ります。モデル（およそ140MB）は初回起動時に取得します。NVIDIA GPU で推定するときは、入れたあとに CPU 版を外して GPU 版を入れます。
+
+```bash
+/opt/imageto3d/venv/bin/pip uninstall -y onnxruntime
+/opt/imageto3d/venv/bin/pip install onnxruntime-gpu
+```
 
 ## アプリとして開く
 

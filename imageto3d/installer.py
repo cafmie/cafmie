@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from .launch import desktop_file_text
-from .paths import REPO_DIR, WEB_DIR
+from .paths import REPO_DIR, WEB_DIR, running_from_checkout
 
 MARKER_BEGIN = "# >>> imageto3d >>>"
 MARKER_END = "# <<< imageto3d <<<"
@@ -16,7 +17,19 @@ PATH_BLOCK = f"{MARKER_BEGIN}\nexport PATH=\"$HOME/.local/bin:$PATH\"\n{MARKER_E
 
 
 def launcher_path() -> Path:
-    return REPO_DIR / "imageto3d.sh"
+    checkout = REPO_DIR / "imageto3d.sh"
+    if running_from_checkout() and checkout.is_file():
+        return checkout
+    argv0 = Path(sys.argv[0])
+    try:
+        if argv0.name == "imageto3d" and argv0.is_file():
+            return argv0.resolve()
+    except OSError:
+        pass
+    found = shutil.which("imageto3d")
+    if found:
+        return Path(found)
+    raise RuntimeError("起動コマンド imageto3d が見つかりません。")
 
 
 def desktop_path() -> Path:
@@ -95,7 +108,7 @@ def status() -> dict:
     installed = False
     if desktop.is_file():
         text = desktop.read_text(encoding="utf-8")
-        installed = "Name=画像から3D" in text and "imageto3d.sh" in text
+        installed = "Name=画像から3D" in text and "StartupWMClass=imageto3d" in text
     if installed:
         message = "このPCにインストール済みです。アプリメニューの「画像から3D」から開けます。"
     else:
@@ -112,8 +125,11 @@ def status() -> dict:
 def install() -> dict:
     launcher = launcher_path()
     if not launcher.is_file():
-        raise RuntimeError("起動スクリプト imageto3d.sh が見つかりません。")
-    launcher.chmod(launcher.stat().st_mode | 0o111)
+        raise RuntimeError("起動コマンド imageto3d が見つかりません。")
+    try:
+        launcher.chmod(launcher.stat().st_mode | 0o111)
+    except OSError:
+        pass
 
     desktop = desktop_path()
     desktop.parent.mkdir(parents=True, exist_ok=True)
