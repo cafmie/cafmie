@@ -53,6 +53,15 @@ sudo dpkg -i dist/imageto3d_0.1.0-1_amd64.deb
 /opt/imageto3d/venv/bin/pip install onnxruntime-gpu
 ```
 
+GitHub の Packages には、同じツールのコンテナイメージを公開しています。
+
+```bash
+docker pull ghcr.io/cafmie/imageto3d:0.1.0
+docker run --rm -p 7860:7860 ghcr.io/cafmie/imageto3d:0.1.0
+```
+
+ブラウザで `http://127.0.0.1:7860` を開きます。モデルはコンテナの中へ、初回起動時に取得します。
+
 ## アプリとして開く
 
 ```bash

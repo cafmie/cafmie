@@ -1,0 +1,48 @@
+name: Publish package
+
+on:
+  push:
+    branches:
+      - cursor/app-package-83e1
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/cafmie/imageto3d:0.1.0
+            ghcr.io/cafmie/imageto3d:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/cafmie/cafmie
+            org.opencontainers.image.description=写真をこのPCの中で立体モデルにします
+            org.opencontainers.image.version=0.1.0
+
+      - name: Make the package public
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/users/cafmie/packages/docker/imageto3d" \
+            -f visibility=public
