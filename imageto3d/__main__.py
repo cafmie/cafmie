@@ -50,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("download-models", help="深度モデルと切り抜きモデルを取得する")
     sub.add_parser("install", help="このPCのアプリメニューとコマンドにインストールする")
+    package = sub.add_parser("package", help="配布用の wheel と Debian パッケージを作る")
+    package.add_argument("-o", "--output", type=Path, default=None, help="出力先。省略すると dist/")
 
     if argv is None:
         argv = sys.argv[1:]
@@ -62,6 +64,8 @@ def main(argv: list[str] | None = None) -> int:
         return _launch_app(getattr(args, "host", "127.0.0.1"), getattr(args, "port", 7860))
     if args.command == "install":
         return _install()
+    if args.command == "package":
+        return _package(args.output)
     if args.command == "download-models":
         return _download()
     if args.command == "serve":
@@ -84,6 +88,20 @@ def _download() -> int:
         return 1
     print("\n準備できました:")
     for path in paths:
+        print(f"  {path}")
+    return 0
+
+
+def _package(output: Path | None) -> int:
+    from .packaging import build_distribution
+
+    try:
+        created = build_distribution(output)
+    except RuntimeError as error:
+        print(f"パッケージを作成できません: {error}", file=sys.stderr)
+        return 1
+    print("パッケージを作成しました:")
+    for path in created:
         print(f"  {path}")
     return 0
 

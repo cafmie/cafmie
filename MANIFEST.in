@@ -1,0 +1,4 @@
+recursive-include imageto3d/web *
+prune imageto3d/__pycache__
+global-exclude __pycache__
+global-exclude *.py[cod]

@@ -80,6 +80,29 @@ def test_install_registers_the_menu_and_command(monkeypatch, tmp_path):
     )
 
 
+def test_install_uses_the_console_script_outside_a_checkout(monkeypatch, tmp_path):
+    import sys
+
+    from imageto3d.installer import install
+
+    script = tmp_path / "bin" / "imageto3d"
+    script.parent.mkdir()
+    script.write_text("#!/bin/sh\n", encoding="utf-8")
+    script.chmod(0o755)
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.setattr("imageto3d.paths.REPO_DIR", tmp_path / "site-packages")
+    monkeypatch.setattr(sys, "argv", [str(script)])
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setattr("imageto3d.installer.shutil.which", lambda name: None)
+
+    result = install()
+
+    text = (home / ".local" / "share" / "applications" / "imageto3d.desktop").read_text(encoding="utf-8")
+    assert f"Exec={script.resolve()}" in text
+    assert result["installed"] is True
+
+
 def test_install_skips_toolchain_directories(monkeypatch, tmp_path):
     from imageto3d.installer import install
 
