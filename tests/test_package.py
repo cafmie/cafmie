@@ -1,12 +1,13 @@
 import os
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
 
 from imageto3d.launch import desktop_file_text
-from imageto3d.packaging import BIN_PATH, ICON_PATH, stage_debian
+from imageto3d.packaging import BIN_PATH, ICON_PATH, archive_windows, stage_debian, stage_windows
 
 
 def test_debian_stage_contains_the_app_and_offline_wheels(tmp_path):
@@ -75,3 +76,36 @@ def test_wheel_contains_the_web_ui(tmp_path):
     assert "imageto3d/web/app.js" in names
     assert "imageto3d/web/favicon.svg" in names
     assert "imageto3d/web/vendor/model-viewer.min.js" in names
+
+
+def test_windows_zip_starts_with_a_double_click_launcher(tmp_path):
+    embed = tmp_path / "embed.zip"
+    with zipfile.ZipFile(embed, "w") as archive:
+        archive.writestr("python.exe", b"")
+        archive.writestr("pythonw.exe", b"")
+        archive.writestr("python312.zip", b"stdlib")
+        archive.writestr("python312._pth", "python312.zip\n.\n#import site\n")
+    site = tmp_path / "site-packages"
+    package = site / "imageto3d"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("__version__ = '0.1.0'\n", encoding="utf-8")
+    stage = tmp_path / "imageto3d-0.1.0-windows-amd64"
+    stage_windows(stage, embed, site)
+    pth = (stage / "python" / "python312._pth").read_text(encoding="ascii")
+    assert "import site" in pth
+    assert "#import site" not in pth
+    assert "Lib\\site-packages" in pth
+    assert (stage / "python" / "Lib" / "site-packages" / "imageto3d" / "__init__.py").is_file()
+    launcher = (stage / "画像から3D.bat").read_bytes()
+    assert launcher.startswith(b"@echo off\r\n")
+    assert b"pythonw.exe" in launcher
+    assert (stage / "imageto3d.bat").read_bytes() == launcher
+
+    dest = tmp_path / "imageto3d-0.1.0-windows-amd64.zip"
+    archive_windows(stage, dest)
+    with zipfile.ZipFile(dest) as archive:
+        info = archive.getinfo("imageto3d-0.1.0-windows-amd64/画像から3D.bat")
+        assert info.flag_bits & 0x800
+        readme = archive.read("imageto3d-0.1.0-windows-amd64/はじめにお読みください.txt")
+    assert readme.startswith(b"\xef\xbb\xbf")
+    assert "画像から3D.bat" in readme.decode("utf-8-sig")

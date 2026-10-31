@@ -3,7 +3,38 @@ import os
 from pathlib import Path
 
 from imageto3d.__main__ import main
-from imageto3d.launch import app_command, desktop_file_text, is_ready
+from imageto3d.launch import app_command, choose_listen_port, desktop_file_text, find_browser, has_display, is_ready
+
+
+def test_windows_edge_is_found_without_a_display_variable(monkeypatch, tmp_path):
+    edge = tmp_path / "Microsoft" / "Edge" / "Application" / "msedge.exe"
+    edge.parent.mkdir(parents=True)
+    edge.write_bytes(b"")
+    monkeypatch.setattr("imageto3d.launch._is_windows", lambda: True)
+    monkeypatch.setenv("PROGRAMFILES", str(tmp_path))
+    monkeypatch.setenv("PROGRAMFILES(X86)", str(tmp_path / "missing"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    monkeypatch.setattr("imageto3d.launch.shutil.which", lambda name: None)
+    assert find_browser() == str(edge)
+    assert has_display() is True
+
+
+def test_busy_port_moves_to_the_next_free_one(monkeypatch):
+    monkeypatch.setattr("imageto3d.launch.can_bind", lambda host, port: port != 7860)
+    monkeypatch.setattr("imageto3d.launch.wait_until_ready", lambda url, timeout=8: False)
+    port, note = choose_listen_port("127.0.0.1", 7860)
+    assert port == 7861
+    assert note == "7860 は使用中のため、7861 で開きます。"
+
+
+def test_existing_app_keeps_its_port(monkeypatch):
+    monkeypatch.setattr("imageto3d.launch.can_bind", lambda host, port: False)
+    monkeypatch.setattr("imageto3d.launch.wait_until_ready", lambda url, timeout=8: True)
+    port, note = choose_listen_port("127.0.0.1", 7860)
+    assert port == 7860
+    assert note is None
 
 
 def test_app_command_opens_one_window():
