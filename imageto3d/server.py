@@ -116,6 +116,21 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"ok": True}
 
+    @app.get("/api/install")
+    def install_status() -> dict:
+        from .installer import status
+
+        return status()
+
+    @app.post("/api/install")
+    def install_now() -> dict:
+        from .installer import install
+
+        try:
+            return install()
+        except RuntimeError as error:
+            raise HTTPException(500, str(error)) from error
+
     @app.get("/api/status")
     def status() -> dict:
         return _snapshot()

@@ -1,8 +1,9 @@
 import json
+import os
 from pathlib import Path
 
 from imageto3d.__main__ import main
-from imageto3d.launch import app_command, desktop_file_text, install_desktop_entry, is_ready
+from imageto3d.launch import app_command, desktop_file_text, is_ready
 
 
 def test_app_command_opens_one_window():
@@ -51,11 +52,48 @@ def test_default_invocation_launches_the_app(monkeypatch):
     assert seen == {"host": "127.0.0.1", "port": 7860}
 
 
-def test_install_writes_a_desktop_entry(monkeypatch, tmp_path):
+def test_install_registers_the_menu_and_command(monkeypatch, tmp_path):
+    from imageto3d.installer import install, status
     from imageto3d.paths import REPO_DIR, WEB_DIR
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    path = install_desktop_entry()
-    text = path.read_text(encoding="utf-8")
-    assert path == tmp_path / ".local" / "share" / "applications" / "imageto3d.desktop"
-    assert text == desktop_file_text(REPO_DIR / "imageto3d.sh", WEB_DIR / "favicon.svg")
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setattr("imageto3d.installer.shutil.which", lambda name: None)
+    before = status()
+    assert before["installed"] is False
+    result = install()
+    desktop = tmp_path / ".local" / "share" / "applications" / "imageto3d.desktop"
+    command = tmp_path / ".local" / "bin" / "imageto3d"
+    assert result["installed"] is True
+    assert desktop.read_text(encoding="utf-8") == desktop_file_text(
+        (REPO_DIR / "imageto3d.sh").resolve(),
+        (WEB_DIR / "favicon.svg").resolve(),
+    )
+    assert command.is_symlink()
+    assert command.resolve() == (REPO_DIR / "imageto3d.sh").resolve()
+    bashrc = (tmp_path / ".bashrc").read_text(encoding="utf-8")
+    assert "# >>> imageto3d >>>" in bashrc
+    again = install()
+    assert again["installed"] is True
+    assert bashrc.count("# >>> imageto3d >>>") == (tmp_path / ".bashrc").read_text(encoding="utf-8").count(
+        "# >>> imageto3d >>>"
+    )
+
+
+def test_install_skips_toolchain_directories(monkeypatch, tmp_path):
+    from imageto3d.installer import install
+
+    home = tmp_path / "home"
+    cargo = tmp_path / "cargo" / "bin"
+    cargo.mkdir(parents=True)
+    user_bin = home / "bin"
+    user_bin.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.setenv("PATH", f"{cargo}{os.pathsep}{user_bin}")
+    monkeypatch.setattr("imageto3d.installer.shutil.which", lambda name: None)
+
+    install()
+
+    assert not (cargo / "imageto3d").exists()
+    assert (user_bin / "imageto3d").is_symlink()
+    assert (home / ".local" / "bin" / "imageto3d").is_symlink()
