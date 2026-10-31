@@ -98,7 +98,7 @@ def test_windows_zip_starts_with_a_double_click_launcher(tmp_path):
     assert (stage / "python" / "Lib" / "site-packages" / "imageto3d" / "__init__.py").is_file()
     launcher = (stage / "画像から3D.bat").read_bytes()
     assert launcher.startswith(b"@echo off\r\n")
-    assert b"python.exe" in launcher
+    assert b"pythonw.exe" in launcher
     assert (stage / "imageto3d.bat").read_bytes() == launcher
 
     dest = tmp_path / "imageto3d-0.1.0-windows-amd64.zip"

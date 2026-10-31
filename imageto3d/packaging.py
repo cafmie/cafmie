@@ -266,8 +266,7 @@ def _windows_launcher() -> bytes:
         "@echo off\r\n"
         "cd /d \"%~dp0\"\r\n"
         "powershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0install.ps1\"\r\n"
-        "\"%~dp0python\\python.exe\" -m imageto3d\r\n"
-        "if errorlevel 1 pause\r\n"
+        "start \"\" \"%~dp0python\\pythonw.exe\" -m imageto3d\r\n"
     ).encode("ascii")
 
 
