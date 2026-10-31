@@ -1,0 +1,10 @@
+# CPU 版の実行環境です。NVIDIA GPU で推定するときは、このファイルの代わりに
+# requirements-gpu.txt を入れてください（onnxruntime と onnxruntime-gpu は共存できません）。
+numpy>=1.26
+pillow>=10
+scipy>=1.11
+onnxruntime>=1.17
+trimesh>=4.4
+fastapi>=0.110
+uvicorn>=0.27
+python-multipart>=0.0.9
