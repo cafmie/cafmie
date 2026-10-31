@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - cursor/app-package-83e1
+      - cursor/windows-package-83e1
       - master
   workflow_dispatch:
 
@@ -46,3 +47,32 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "/users/cafmie/packages/container/imageto3d" \
             -f visibility=public
+
+  windows:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the Windows zip
+        run: |
+          pip install build
+          python -m imageto3d package
+
+      - name: Publish the Windows zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          asset=dist/imageto3d-0.1.0-windows-amd64.zip
+          title="画像から3D 0.1.0"
+          notes="Windows 64bit 用です。zip を展開し、画像から3D.bat をダブルクリックします。Linux 用のイメージは Packages の ghcr.io/cafmie/imageto3d です。"
+          if gh release view v0.1.0 >/dev/null 2>&1; then
+            gh release upload v0.1.0 "$asset" --clobber
+          else
+            gh release create v0.1.0 "$asset" --title "$title" --notes "$notes"
+          fi
