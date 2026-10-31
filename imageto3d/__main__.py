@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     convert.add_argument("--smooth", type=float, default=1.0)
 
     sub.add_parser("download-models", help="深度モデルと切り抜きモデルを取得する")
-    sub.add_parser("install", help="アプリメニューに「画像から3D」を追加する")
+    sub.add_parser("install", help="このPCのアプリメニューとコマンドにインストールする")
 
     if argv is None:
         argv = sys.argv[1:]
@@ -89,11 +89,16 @@ def _download() -> int:
 
 
 def _install() -> int:
-    from .launch import install_desktop_entry
+    from .installer import install
 
-    path = install_desktop_entry()
-    print(f"アプリメニューに追加しました: {path}")
-    print("「画像から3D」から開けます。")
+    try:
+        result = install()
+    except RuntimeError as error:
+        print(f"インストールに失敗しました: {error}", file=sys.stderr)
+        return 1
+    print(result["message"])
+    for note in result.get("notes", []):
+        print(f"  {note}")
     return 0
 
 
