@@ -62,7 +62,7 @@ jobs:
 
       - name: Build the Windows zip
         run: |
-          pip install build
+          pip install -r requirements.txt build
           python -m imageto3d package
 
       - name: Publish the Windows zip

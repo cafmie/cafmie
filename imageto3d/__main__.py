@@ -14,7 +14,30 @@ from .pipeline import Settings, open_image, reconstruct
 from .sample_art import write_sample
 
 
+def ensure_stdio() -> None:
+    """pythonw.exe has no console, so stdout and stderr are None and print() crashes."""
+
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    try:
+        if os.name == "nt":
+            appdata = os.environ.get("APPDATA")
+            base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
+        else:
+            base = Path.home() / ".local" / "share"
+        log_dir = base / "imageto3d"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        handle = open(log_dir / "app.log", "a", encoding="utf-8", errors="replace", buffering=1)
+    except OSError:
+        handle = open(os.devnull, "w", encoding="utf-8")
+    if sys.stdout is None:
+        sys.stdout = handle
+    if sys.stderr is None:
+        sys.stderr = handle
+
+
 def main(argv: list[str] | None = None) -> int:
+    ensure_stdio()
     parser = argparse.ArgumentParser(
         prog="imageto3d",
         description="画像1枚から、このPCの中だけで3Dモデルを作ります。推定はGPUを優先します。",
@@ -121,14 +144,18 @@ def _install() -> int:
 
 
 def _launch_app(host: str, port: int) -> int:
+    ensure_stdio()
     from .launch import (
         APP_NAME,
         choose_listen_port,
         is_ready,
         open_app_window,
         open_fallback_browser,
+        profile_dir,
+        report_failure,
         run_server,
         stop_server,
+        wait_for_window,
         wait_until_ready,
     )
 
@@ -144,7 +171,7 @@ def _launch_app(host: str, port: int) -> int:
         try:
             port, note = choose_listen_port(host, port)
         except RuntimeError as error:
-            print(str(error), file=sys.stderr)
+            report_failure(str(error))
             return 1
         url = f"http://{host}:{port}"
         if is_ready(url):
@@ -156,9 +183,8 @@ def _launch_app(host: str, port: int) -> int:
             server, thread = run_server(host, port)
             if not wait_until_ready(url):
                 stop_server(server, thread)
-                print(
-                    f"起動できませんでした。開いている「{APP_NAME}」を閉じてから、もう一度開いてください。",
-                    file=sys.stderr,
+                report_failure(
+                    f"起動できませんでした。開いている「{APP_NAME}」を閉じてから、もう一度開いてください。"
                 )
                 return 1
             print(f"開いています: {url}")
@@ -175,24 +201,23 @@ def _launch_app(host: str, port: int) -> int:
         stop_server(server, thread)
         return 0
     if window is None:
-        print("表示できるブラウザが見つかりません。上のアドレスを開いてください。")
-        if server is None:
-            return 0
-        try:
-            while thread.is_alive():
-                thread.join(timeout=0.4)
-        except KeyboardInterrupt:
-            pass
-        stop_server(server, thread)
-        return 0
+        report_failure(
+            "表示できるブラウザが見つかりません。Google Chrome または Microsoft Edge を入れてから、もう一度開いてください。"
+            f"\n{url}"
+        )
+        if server is not None and thread is not None:
+            stop_server(server, thread)
+        return 1
     try:
-        code = window.wait()
+        opened = wait_for_window(window, profile_dir())
     except KeyboardInterrupt:
+        opened = False
         window.terminate()
-        code = 0
+    if not opened:
+        report_failure(f"画面を開けませんでした。ブラウザで次のアドレスを開いてください。\n{url}")
     if server is not None and thread is not None:
         stop_server(server, thread)
-    return 0 if code == 0 else 1
+    return 0 if opened else 1
 
 
 def _serve(host: str, port: int, open_browser: bool) -> int:
