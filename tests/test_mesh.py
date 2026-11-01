@@ -112,6 +112,60 @@ def test_bundle_writes_obj_package(tmp_path):
         assert image.size[0] > 8
 
 
+def test_photo_detail_adds_fine_ridges_without_contouring_smooth_shading():
+    rgb, depth, mask = _disk(80)
+    rgb[mask > 0.5] = (30, 30, 30)
+    rgb[:, 1::4] = (240, 240, 240)
+    plain = build_mesh(
+        rgb, depth, mask, mode="volume", resolution=80, smooth=0, inflate=0.3, depth_scale=0.2, detail=0
+    )
+    fine = build_mesh(
+        rgb, depth, mask, mode="volume", resolution=80, smooth=0, inflate=0.3, depth_scale=0.2, detail=1
+    )
+    ridges = float(np.max(np.abs(fine.vertices[:, 2] - plain.vertices[:, 2])))
+    assert ridges > 0.01
+    assert _sealed(fine).is_watertight
+
+    n = 96
+    y, x = np.mgrid[0:n, 0:n]
+    radius = np.sqrt((x - (n - 1) / 2) ** 2 + (y - (n - 1) / 2) ** 2)
+    shade = np.clip(1.0 - radius / (n * 0.42), 0.0, 1.0)
+    smooth_rgb = np.clip(shade[..., None] * 180 + 40, 0, 255).astype(np.uint8)
+    smooth_rgb = np.repeat(smooth_rgb, 3, axis=2)
+    smooth_mask = (radius < n * 0.42).astype(np.float32)
+    base = build_mesh(
+        smooth_rgb, smooth_mask, smooth_mask, mode="volume", resolution=96, smooth=0, inflate=0.25, detail=0
+    )
+    contoured = build_mesh(
+        smooth_rgb, smooth_mask, smooth_mask, mode="volume", resolution=96, smooth=0, inflate=0.25, detail=1
+    )
+    bands = float(np.max(np.abs(contoured.vertices[:, 2] - base.vertices[:, 2])))
+    assert bands < ridges * 0.35
+
+
+def test_guided_depth_gets_sharper_at_an_image_edge():
+    from PIL import Image
+
+    from imageto3d.pipeline import guide_depth
+
+    width = 80
+    soft = 1 / (1 + np.exp(-(np.linspace(-4, 4, width))))
+    depth = np.tile(soft, (width, 1)).astype(np.float32)
+    rgb = np.zeros((width, width, 3), dtype=np.uint8)
+    rgb[:, : width // 2] = 255
+    guided = guide_depth(depth, Image.fromarray(rgb))
+    assert float(np.max(np.abs(np.diff(guided[width // 2])))) > float(np.max(np.abs(np.diff(depth[width // 2])))) * 1.4
+
+
+def test_settings_keep_a_fine_resolution():
+    from imageto3d.pipeline import Settings
+
+    clamped = Settings(resolution=900, detail=4).clamped()
+    assert clamped.resolution == 768
+    assert clamped.detail == 1.5
+    assert Settings().clamped().resolution == 512
+
+
 def test_empty_mask_falls_back_to_a_plaque():
     rgb = np.full((30, 30, 3), 200, dtype=np.uint8)
     depth = np.linspace(0, 1, 30, dtype=np.float32)[None, :].repeat(30, axis=0)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
@@ -17,7 +18,8 @@ from .bundle import save_bundle
 from .download import ensure_models, models_present
 from .launch import APP_NAME
 from .paths import WEB_DIR, output_dir
-from .pipeline import Settings, open_image, reconstruct
+from .objects import describe_objects, parse_object_ids
+from .pipeline import Settings, open_image, prepare_mask, reconstruct
 
 logger = logging.getLogger("imageto3d")
 
@@ -148,11 +150,13 @@ def create_app() -> FastAPI:
         image: UploadFile = File(...),
         mode: str = Form("volume"),
         cutout: str = Form("true"),
-        resolution: int = Form(220),
+        resolution: int = Form(512),
         depth_scale: float = Form(0.22),
         inflate: float = Form(0.46),
         thickness: float = Form(0.08),
         smooth: float = Form(1.0),
+        detail: float = Form(0.85),
+        objects: str = Form(""),
     ) -> JSONResponse:
         snapshot = _snapshot()
         if not snapshot["ready"]:
@@ -173,8 +177,15 @@ def create_app() -> FastAPI:
                 inflate=inflate,
                 thickness=thickness,
                 smooth=smooth,
+                detail=detail,
+                objects=parse_object_ids(objects),
             ).clamped()
-            result = reconstruct(picture, settings, on_status=lambda note: logger.info(note))
+            result = reconstruct(
+                picture,
+                settings,
+                on_status=lambda note: logger.info(note),
+                mask_key=hashlib.sha256(payload).digest(),
+            )
         except HTTPException:
             raise
         except ValueError as error:
@@ -205,6 +216,34 @@ def create_app() -> FastAPI:
                 "mask": f"/outputs/{job}/mask.png",
             }
         )
+
+    @app.post("/api/objects")
+    async def objects_endpoint(
+        image: UploadFile = File(...),
+        cutout: str = Form("true"),
+    ) -> JSONResponse:
+        snapshot = _snapshot()
+        if not snapshot["ready"]:
+            detail = snapshot["message"] or snapshot["label"]
+            raise HTTPException(503, detail)
+        payload = await image.read()
+        if len(payload) > 20 * 1024 * 1024:
+            raise HTTPException(413, "画像は20MBまでです")
+        if not payload:
+            raise HTTPException(400, "画像が空です")
+        if not _as_bool(cutout):
+            return JSONResponse({"count": 0, "objects": []})
+        try:
+            picture = open_image(payload)
+            mask, _kind = prepare_mask(picture, True, hashlib.sha256(payload).digest())
+        except HTTPException:
+            raise
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        except Exception as error:
+            logger.exception("object detection failed")
+            raise HTTPException(500, f"物体を分けられませんでした: {error}") from error
+        return JSONResponse(describe_objects(mask))
 
     @app.get("/outputs/{job}/{name}")
     def output_file(job: str, name: str) -> FileResponse:
