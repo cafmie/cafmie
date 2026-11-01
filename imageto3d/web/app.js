@@ -1,6 +1,12 @@
 const fileInput = document.querySelector("#file");
 const drop = document.querySelector("#drop");
+const frame = document.querySelector("#frame");
 const preview = document.querySelector("#preview");
+const objectLayer = document.querySelector("#objectLayer");
+const objectsEl = document.querySelector("#objects");
+const objectsText = document.querySelector("#objectsText");
+const objectChoices = document.querySelector("#objectChoices");
+const replaceButton = document.querySelector("#replace");
 const go = document.querySelector("#go");
 const sample = document.querySelector("#sample");
 const statusEl = document.querySelector("#status");
@@ -22,9 +28,24 @@ const hints = {
   relief: "片面だけの厚みです。平らな面が背面になり、印刷向きです。",
 };
 
+const OBJECT_COLORS = [
+  [216, 74, 36],
+  [36, 110, 168],
+  [44, 130, 78],
+  [168, 120, 32],
+  [120, 64, 160],
+  [20, 140, 150],
+];
+
 let currentFile = null;
 let ready = false;
 let objectUrl = null;
+let objectCatalog = [];
+let selectedObjects = new Set();
+let labelCanvas = null;
+let overlayCanvas = null;
+let detectToken = 0;
+let detectPromise = Promise.resolve();
 
 function bindSlider(id, outputId, digits = 2) {
   const input = document.querySelector(id);
@@ -70,7 +91,11 @@ function setFile(file) {
   preview.src = objectUrl;
   preview.alt = file.name || "選択した画像";
   drop.classList.add("has-image");
+  frame.hidden = false;
+  replaceButton.hidden = false;
   hideError();
+  clearObjects();
+  detectPromise = detectObjects();
 }
 
 fileInput.addEventListener("change", () => {
@@ -91,16 +116,197 @@ window.addEventListener("paste", (event) => {
   if (file) setFile(file);
 });
 
+replaceButton.addEventListener("click", () => fileInput.click());
+
 sample.addEventListener("click", async () => {
   hideError();
-  const response = await fetch("/sample.png");
+  const response = await fetch("/sample.jpg");
   if (!response.ok) {
     showError("サンプル画像を読み込めませんでした。");
     return;
   }
   const blob = await response.blob();
-  setFile(new File([blob], "sample.png", { type: "image/png" }));
+  setFile(new File([blob], "sample.jpg", { type: "image/jpeg" }));
 });
+
+document.querySelector("#cutout").addEventListener("change", () => {
+  if (!currentFile) return;
+  clearObjects();
+  detectPromise = detectObjects();
+});
+
+function clearObjects() {
+  detectToken += 1;
+  objectCatalog = [];
+  selectedObjects = new Set();
+  labelCanvas = null;
+  overlayCanvas = null;
+  objectsEl.hidden = true;
+  objectsText.textContent = "";
+  objectChoices.innerHTML = "";
+  objectLayer.hidden = true;
+}
+
+async function detectObjects() {
+  if (!currentFile || !document.querySelector("#cutout").checked) return;
+  const token = detectToken;
+  objectsEl.hidden = false;
+  objectsText.textContent = "物体を探しています";
+  const body = new FormData();
+  body.append("image", currentFile, currentFile.name || "image.png");
+  body.append("cutout", "true");
+  try {
+    const response = await fetch("/api/objects", { method: "POST", body });
+    const data = await response.json().catch(() => ({}));
+    if (token !== detectToken) return;
+    if (!response.ok || !data.objects || data.objects.length < 2) {
+      clearObjects();
+      return;
+    }
+    objectCatalog = data.objects;
+    selectedObjects = new Set([data.objects[0].id]);
+    await loadLabel(data.label);
+    if (token !== detectToken) return;
+    objectsText.textContent = `${data.objects.length}個の物体を見つけました。写真の上を押すと、その物体だけを立体にします。`;
+    renderChoices();
+    objectLayer.hidden = false;
+    paintLayer();
+  } catch {
+    if (token === detectToken) clearObjects();
+  }
+}
+
+function loadLabel(encoded) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      labelCanvas = document.createElement("canvas");
+      labelCanvas.width = image.width;
+      labelCanvas.height = image.height;
+      labelCanvas.getContext("2d").drawImage(image, 0, 0);
+      resolve();
+    };
+    image.onerror = () => reject(new Error("label"));
+    image.src = `data:image/png;base64,${encoded}`;
+  });
+}
+
+function renderChoices() {
+  objectChoices.innerHTML = "";
+  const allSelected = selectedObjects.size === objectCatalog.length;
+  for (const item of objectCatalog) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = item.label;
+    button.setAttribute("aria-pressed", !allSelected && selectedObjects.has(item.id) ? "true" : "false");
+    button.addEventListener("click", () => chooseOnly(item.id));
+    objectChoices.appendChild(button);
+  }
+  const all = document.createElement("button");
+  all.type = "button";
+  all.textContent = "全部まとめる";
+  all.setAttribute("aria-pressed", allSelected ? "true" : "false");
+  all.addEventListener("click", chooseAll);
+  objectChoices.appendChild(all);
+  buildOverlay();
+}
+
+function chooseOnly(id) {
+  selectedObjects = new Set([id]);
+  renderChoices();
+  paintLayer();
+}
+
+function chooseAll() {
+  selectedObjects = new Set(objectCatalog.map((item) => item.id));
+  renderChoices();
+  paintLayer();
+}
+
+function buildOverlay() {
+  if (!labelCanvas) {
+    overlayCanvas = null;
+    return;
+  }
+  const width = labelCanvas.width;
+  const height = labelCanvas.height;
+  const source = labelCanvas.getContext("2d").getImageData(0, 0, width, height).data;
+  const image = new ImageData(width, height);
+  const allSelected = selectedObjects.size === objectCatalog.length;
+  for (let index = 0; index < width * height; index += 1) {
+    const id = source[index * 4];
+    if (!id) continue;
+    const color = OBJECT_COLORS[(id - 1) % OBJECT_COLORS.length];
+    const on = selectedObjects.has(id);
+    image.data[index * 4] = color[0];
+    image.data[index * 4 + 1] = color[1];
+    image.data[index * 4 + 2] = color[2];
+    image.data[index * 4 + 3] = on ? (allSelected ? 70 : 120) : 36;
+  }
+  overlayCanvas = document.createElement("canvas");
+  overlayCanvas.width = width;
+  overlayCanvas.height = height;
+  overlayCanvas.getContext("2d").putImageData(image, 0, 0);
+}
+
+function containBox() {
+  const rect = preview.getBoundingClientRect();
+  const naturalW = preview.naturalWidth || 1;
+  const naturalH = preview.naturalHeight || 1;
+  const scale = Math.min(rect.width / naturalW, rect.height / naturalH);
+  const drawnW = naturalW * scale;
+  const drawnH = naturalH * scale;
+  return {
+    rect,
+    left: (rect.width - drawnW) / 2,
+    top: (rect.height - drawnH) / 2,
+    width: drawnW,
+    height: drawnH,
+  };
+}
+
+function paintLayer() {
+  if (objectLayer.hidden || !overlayCanvas || !preview.naturalWidth) return;
+  const box = containBox();
+  const ratio = window.devicePixelRatio || 1;
+  objectLayer.width = Math.max(1, Math.round(box.rect.width * ratio));
+  objectLayer.height = Math.max(1, Math.round(box.rect.height * ratio));
+  const ctx = objectLayer.getContext("2d");
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, box.rect.width, box.rect.height);
+  ctx.drawImage(overlayCanvas, box.left, box.top, box.width, box.height);
+  ctx.font = "600 13px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const allSelected = selectedObjects.size === objectCatalog.length;
+  for (const item of objectCatalog) {
+    const x = box.left + item.cx * box.width;
+    const y = box.top + item.cy * box.height;
+    const on = selectedObjects.has(item.id);
+    ctx.beginPath();
+    ctx.fillStyle = on && !allSelected ? "#241c16" : "rgba(255,255,255,0.92)";
+    ctx.arc(x, y, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = on && !allSelected ? "#fff7f3" : "#241c16";
+    ctx.fillText(String(item.id), x, y + 0.5);
+  }
+}
+
+objectLayer.addEventListener("click", (event) => {
+  if (!labelCanvas || !preview.naturalWidth) return;
+  const box = containBox();
+  const rect = preview.getBoundingClientRect();
+  const x = event.clientX - rect.left - box.left;
+  const y = event.clientY - rect.top - box.top;
+  if (x < 0 || y < 0 || x > box.width || y > box.height) return;
+  const lx = Math.min(labelCanvas.width - 1, Math.floor((x / box.width) * labelCanvas.width));
+  const ly = Math.min(labelCanvas.height - 1, Math.floor((y / box.height) * labelCanvas.height));
+  const id = labelCanvas.getContext("2d").getImageData(lx, ly, 1, 1).data[0];
+  if (id) chooseOnly(id);
+});
+
+preview.addEventListener("load", () => paintLayer());
+window.addEventListener("resize", () => paintLayer());
 
 function showError(message) {
   errorEl.hidden = false;
@@ -148,6 +354,7 @@ go.addEventListener("click", async () => {
     showError("先に画像を選んでください。");
     return;
   }
+  await detectPromise;
   const body = new FormData();
   body.append("image", currentFile, currentFile.name || "image.png");
   body.append("mode", selectedMode());
@@ -158,6 +365,9 @@ go.addEventListener("click", async () => {
   body.append("thickness", document.querySelector("#thickness").value);
   body.append("smooth", document.querySelector("#smooth").value);
   body.append("detail", document.querySelector("#detail").value);
+  if (objectCatalog.length >= 2 && selectedObjects.size > 0) {
+    body.append("objects", [...selectedObjects].join(","));
+  }
 
   go.disabled = true;
   working.hidden = false;

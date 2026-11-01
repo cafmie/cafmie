@@ -85,8 +85,8 @@ Windows の zip では「インストール.bat」が同じ処理をします。
 
 サーバーだけ起動して自分でブラウザを開くときは `python -m imageto3d serve` です。`--open` を付けると通常のブラウザが開きます。待受先を変えるときは `--host` と `--port` を使います。
 
-1. 画像をドロップする（貼り付けもできます）。「サンプルのリンゴで試す」でも始められます。
-2. 形を選ぶ。**立体**は表に写真の凹凸、裏になめらかな厚みを付けます。**レリーフ**は片面だけで、背面が平らです。
+1. 画像をドロップする（貼り付けもできます）。「サンプルのお城で試す」でも始められます。サンプル写真は[フリー素材ドットコム「メルヘン・お城02」](https://www.free-materials.com/%E3%83%A1%E3%83%AB%E3%83%98%E3%83%B3%E3%83%BB%E3%81%8A%E5%9F%8E02/)です。
+2. 形を選ぶ。**立体**は表に写真の凹凸、裏になめらかな厚みを付けます。**レリーフ**は片面だけで、背面が平らです。背景の切り抜きで物体が離れて複数あるときは、写真の上で立体にするものを選べます。
 3. 「3Dモデルを作る」を押す。右側でドラッグして回せます。
 4. GLB（テクスチャ付き）、STL（形状のみ）、OBJ（zip）を保存する。
 
@@ -100,7 +100,7 @@ python -m imageto3d convert photo.png -o relief.stl --mode relief --thickness 0.
 python -m imageto3d convert photo.png -o photo.zip
 ```
 
-出力の拡張子は `.glb` `.stl` `.obj` `.zip` です。`--no-cutout` で背景の切り抜きを省略できます。
+出力の拡張子は `.glb` `.stl` `.obj` `.zip` です。`--no-cutout` で背景の切り抜きを省略できます。`--objects 1` や `--objects 1,3` で、離れて写った物体のうち立体にするものを番号で指定できます。番号は大きい塊から 1 です。
 
 ## スライダー
 
@@ -115,11 +115,11 @@ python -m imageto3d convert photo.png -o photo.zip
 | 密度 | メッシュの細かさ。初期値は 512 で、最大 768 です |
 | 細部 | 写真のきめ（布、毛、文字など）を表面の細かい凹凸にする強さ |
 
-被写体が一つで、背景と色が分かれている写真が向いています。
+背景と色が分かれている写真が向いています。物体が離れて写っているときは、作る前にどれを立体にするか選べます。
 
 ## しくみと限界
 
-1. 背景を切り抜く（silueta / U²-Net 系のONNX）
+1. 背景を切り抜く（silueta / U²-Net 系のONNX）。切り抜いた範囲が離れた塊になると、それを物体として写真の上に示し、選んだものだけをメッシュにします
 2. 奥行きを推定する（Depth Anything V2 Small）
 3. 輪郭をドーム状にふくらませ、手前に奥行きを足して閉じたメッシュにする
 
@@ -141,3 +141,4 @@ pytest
 - 3Dプレビューは [model-viewer](https://github.com/google/model-viewer)（BSD-3-Clause）です。`imageto3d/web/vendor/model-viewer.min.js`
 - 深度モデルは [Depth Anything V2 Small](https://github.com/DepthAnything/Depth-Anything-V2)（Apache-2.0）の ONNX 版を、初回に Hugging Face から取得します
 - 切り抜きモデル silueta は [rembg](https://github.com/danielgatis/rembg) の配布物を初回に取得します
+- サンプル写真「メルヘン・お城02」は [フリー素材ドットコム](https://www.free-materials.com/%E3%83%A1%E3%83%AB%E3%83%98%E3%83%B3%E3%83%BB%E3%81%8A%E5%9F%8E02/) の素材です。アプリのデモ画像としての利用です

@@ -9,9 +9,8 @@ from pathlib import Path
 
 from .bundle import save_bundle
 from .download import ensure_models
-from .paths import WEB_DIR
+from .objects import parse_object_ids
 from .pipeline import Settings, open_image, reconstruct
-from .sample_art import write_sample
 
 
 def ensure_stdio() -> None:
@@ -71,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     convert.add_argument("--thickness", type=float, default=0.08)
     convert.add_argument("--smooth", type=float, default=1.0)
     convert.add_argument("--detail", type=float, default=0.85, help="写真のきめを表面の凹凸にする強さ")
+    convert.add_argument("--objects", default="", help="立体にする物体の番号。例: 1 または 1,3")
 
     sub.add_parser("download-models", help="深度モデルと切り抜きモデルを取得する")
     sub.add_parser("install", help="このPCのアプリメニューとコマンドにインストールする")
@@ -160,9 +160,6 @@ def _launch_app(host: str, port: int) -> int:
         wait_until_ready,
     )
 
-    sample = WEB_DIR / "sample.png"
-    if not sample.is_file():
-        write_sample(sample)
     server = None
     thread = None
     if is_ready(f"http://{host}:{port}"):
@@ -224,9 +221,6 @@ def _launch_app(host: str, port: int) -> int:
 def _serve(host: str, port: int, open_browser: bool) -> int:
     import uvicorn
 
-    sample = WEB_DIR / "sample.png"
-    if not sample.is_file():
-        write_sample(sample)
     if open_browser:
         import threading
         import webbrowser
@@ -264,6 +258,7 @@ def _convert(args) -> int:
                 thickness=args.thickness,
                 smooth=args.smooth,
                 detail=args.detail,
+                objects=parse_object_ids(args.objects),
             ),
             on_status=print,
         )
