@@ -37,7 +37,7 @@
         <label><input type="radio" name="mode" value="volume" checked> 立体</label>
         <label><input type="radio" name="mode" value="relief"> レリーフ</label>
       </fieldset>
-      <p class="hint" id="modeHint">表に写真の凹凸、裏になめらかな厚みを付けた立体です。</p>
+        <p class="hint" id="modeHint">表に写真の凹凸と細部、裏になめらかな厚みを付けた立体です。</p>
 
       <label class="check">
         <input id="cutout" type="checkbox" checked>
@@ -62,13 +62,17 @@
           <input id="smooth" type="range" min="0" max="3" step="0.1" value="1">
         </label>
         <label>
-          <span>密度 <b id="resolutionValue">220</b></span>
-          <input id="resolution" type="range" min="96" max="320" step="16" value="220">
+          <span>密度 <b id="resolutionValue">512</b></span>
+          <input id="resolution" type="range" min="192" max="768" step="32" value="512">
+        </label>
+        <label>
+          <span>細部 <b id="detailValue">0.85</b></span>
+          <input id="detail" type="range" min="0" max="1.5" step="0.05" value="0.85">
         </label>
       </div>
 
       <button class="go" id="go" type="button" disabled>3Dモデルを作る</button>
-      <p class="fine">処理はネットワークに画像を送らず、このPCの中で完結します。深度と切り抜きは GPU があればそこで計算します。初回だけモデルを取得します。</p>
+      <p class="fine">処理はネットワークに画像を送らず、このPCの中で完結します。深度と切り抜きは GPU があればそこで計算します。細部は写真のきめを表面の凹凸にします。見えない裏側はなめらかな殻のままです。初回だけモデルを取得します。</p>
 
       <div class="install" id="install">
         <p id="installText">インストール状態を確認しています</p>

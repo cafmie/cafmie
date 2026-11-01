@@ -18,7 +18,7 @@ const installText = document.querySelector("#installText");
 const installButton = document.querySelector("#installButton");
 
 const hints = {
-  volume: "表に写真の凹凸、裏になめらかな厚みを付けた立体です。",
+  volume: "表に写真の凹凸と細部、裏になめらかな厚みを付けた立体です。",
   relief: "片面だけの厚みです。平らな面が背面になり、印刷向きです。",
 };
 
@@ -42,6 +42,7 @@ bindSlider("#inflate", "#inflateValue");
 bindSlider("#thickness", "#thicknessValue");
 bindSlider("#smooth", "#smoothValue", 1);
 bindSlider("#resolution", "#resolutionValue", 0);
+bindSlider("#detail", "#detailValue");
 
 function selectedMode() {
   return document.querySelector('input[name="mode"]:checked').value;
@@ -156,6 +157,7 @@ go.addEventListener("click", async () => {
   body.append("inflate", document.querySelector("#inflate").value);
   body.append("thickness", document.querySelector("#thickness").value);
   body.append("smooth", document.querySelector("#smooth").value);
+  body.append("detail", document.querySelector("#detail").value);
 
   go.disabled = true;
   working.hidden = false;

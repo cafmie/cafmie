@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 from PIL import Image, ImageOps
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, uniform_filter
 
 from . import depth as depth_model
 from . import segment as segment_model
@@ -20,11 +20,12 @@ from .preview import clean_mask, colorize_depth, mask_preview
 class Settings:
     mode: str = "volume"
     cutout: bool = True
-    resolution: int = 220
+    resolution: int = 512
     depth_scale: float = 0.22
     inflate: float = 0.46
     thickness: float = 0.08
     smooth: float = 1.0
+    detail: float = 0.85
 
     def clamped(self) -> Settings:
         mode = self.mode if self.mode in {"volume", "relief"} else "volume"
@@ -32,11 +33,12 @@ class Settings:
             self,
             mode=mode,
             cutout=bool(self.cutout),
-            resolution=int(np.clip(self.resolution, 64, 360)),
+            resolution=int(np.clip(self.resolution, 64, 768)),
             depth_scale=float(np.clip(self.depth_scale, 0.0, 1.5)),
             inflate=float(np.clip(self.inflate, 0.0, 1.2)),
             thickness=float(np.clip(self.thickness, 0.0, 0.6)),
             smooth=float(np.clip(self.smooth, 0.0, 4.0)),
+            detail=float(np.clip(self.detail, 0.0, 1.5)),
         )
 
 
@@ -63,7 +65,7 @@ def open_image(data: bytes) -> Image.Image:
         image = image.convert("RGBA" if "transparency" in image.info else "RGB")
     elif image.mode not in {"RGB", "RGBA"}:
         image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
-    image.thumbnail((1800, 1800), Image.Resampling.LANCZOS)
+    image.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
     return image
 
 
@@ -97,6 +99,7 @@ def reconstruct(image: Image.Image, settings: Settings, on_status=None) -> Resul
     composite = _on_gray(rgb, mask) if settings.cutout else rgb
     depth = depth_model.estimate_depth(composite)
     depth = _near_is_large(depth, mask)
+    depth = guide_depth(depth, composite)
 
     if on_status:
         on_status("メッシュを組んでいます")
@@ -110,6 +113,7 @@ def reconstruct(image: Image.Image, settings: Settings, on_status=None) -> Resul
         inflate=settings.inflate,
         thickness=settings.thickness,
         smooth=settings.smooth,
+        detail=settings.detail,
     )
     preview = _resize_preview(depth, mask, 420)
     return Result(
@@ -139,6 +143,29 @@ def _on_gray(image: Image.Image, mask: np.ndarray) -> Image.Image:
     flat = np.full_like(rgb, 128.0)
     mixed = rgb * alpha + flat * (1.0 - alpha)
     return Image.fromarray(mixed.astype(np.uint8))
+
+
+def guide_depth(depth: np.ndarray, image: Image.Image) -> np.ndarray:
+    """Move blurry depth onto the photograph's edges so small shapes stay separate."""
+
+    guide = image.convert("L").resize((depth.shape[1], depth.shape[0]), Image.Resampling.LANCZOS)
+    gray = np.asarray(guide, dtype=np.float32) / 255.0
+    radius = max(2, min(12, min(depth.shape) // 24))
+    return _guided_filter(gray, depth.astype(np.float32), radius, eps=1e-3)
+
+
+def _guided_filter(guide: np.ndarray, source: np.ndarray, radius: int, eps: float) -> np.ndarray:
+    window = radius * 2 + 1
+    mean_guide = uniform_filter(guide, size=window)
+    mean_source = uniform_filter(source, size=window)
+    corr_guide = uniform_filter(guide * guide, size=window)
+    corr_both = uniform_filter(guide * source, size=window)
+    variance = corr_guide - mean_guide * mean_guide
+    covariance = corr_both - mean_guide * mean_source
+    slope = covariance / (variance + eps)
+    intercept = mean_source - slope * mean_guide
+    refined = uniform_filter(slope, size=window) * guide + uniform_filter(intercept, size=window)
+    return refined.astype(np.float32)
 
 
 def _near_is_large(depth: np.ndarray, mask: np.ndarray) -> np.ndarray:
