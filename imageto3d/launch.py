@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -14,7 +15,7 @@ from pathlib import Path
 
 from .paths import REPO_DIR, WEB_DIR
 
-APP_NAME = "画像から3D"
+APP_NAME = "img to 3D"
 _BROWSERS = (
     "google-chrome",
     "google-chrome-stable",
@@ -169,14 +170,108 @@ def choose_listen_port(host: str, port: int) -> tuple[int, str | None]:
     for candidate in range(port + 1, port + 21):
         if can_bind(host, candidate):
             return candidate, f"{port} は使用中のため、{candidate} で開きます。"
-    raise RuntimeError("空いているポートが見つかりません。開いている「画像から3D」を閉じてから、もう一度開いてください。")
+    raise RuntimeError(f"空いているポートが見つかりません。開いている「{APP_NAME}」を閉じてから、もう一度開いてください。")
 
 
 def open_app_window(url: str) -> subprocess.Popen[bytes] | None:
     browser = find_browser()
     if browser is None or not has_display():
         return None
-    return subprocess.Popen(app_command(browser, url, profile_dir()))
+    # The browser must not inherit our console pipes. pythonw has no console,
+    # and a pipe that closes when this process ends takes the window down with it.
+    return subprocess.Popen(
+        app_command(browser, url, profile_dir()),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def command_line_contains(needle: str) -> bool:
+    if _is_windows():
+        return _windows_command_line_contains(needle)
+    return _posix_command_line_contains(needle)
+
+
+def _posix_command_line_contains(needle: str) -> bool:
+    encoded = os.fsencode(needle)
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return False
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes()
+        except OSError:
+            continue
+        if encoded in cmdline.replace(b"\x00", b" "):
+            return True
+    return False
+
+
+def _windows_command_line_contains(needle: str) -> bool:
+    script = (
+        "$needle = $env:IMAGETO3D_NEEDLE; "
+        "$hit = Get-CimInstance Win32_Process | Where-Object { "
+        "$_.CommandLine -and $_.CommandLine.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0 "
+        "} | Select-Object -First 1; "
+        "if ($hit) { exit 0 } else { exit 1 }"
+    )
+    try:
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script],
+            env={**os.environ, "IMAGETO3D_NEEDLE": needle},
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return completed.returncode == 0
+
+
+def wait_for_window(
+    process: subprocess.Popen | None,
+    profile: Path,
+    grace: float = 10.0,
+    stub_limit: float = 1.5,
+) -> bool:
+    """Keep running until the application window closes.
+
+    Chrome and Edge often exit the process we started and leave the window in a
+    child. A launcher that only lived a moment is not the window.
+    """
+
+    started = time.monotonic()
+    saw_window = False
+    while True:
+        now = time.monotonic()
+        if process is not None and process.poll() is None:
+            if now - started >= stub_limit:
+                saw_window = True
+            time.sleep(0.4)
+            continue
+        if command_line_contains(str(profile)):
+            saw_window = True
+            time.sleep(0.4)
+            continue
+        if saw_window:
+            return True
+        if now - started >= grace:
+            return False
+        time.sleep(0.2)
+
+
+def report_failure(message: str) -> None:
+    print(message, file=sys.stderr)
+    if not _is_windows():
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(None, message, APP_NAME, 0x00000010)
+    except (AttributeError, OSError):
+        return
 
 
 def open_fallback_browser(url: str) -> bool:

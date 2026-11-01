@@ -172,8 +172,9 @@ def stage_windows(stage: Path, embed_zip: Path, site_packages: Path) -> None:
     destination = python_dir / "Lib" / "site-packages"
     shutil.copytree(site_packages, destination)
     launcher = _windows_launcher()
-    (stage / "画像から3D.bat").write_bytes(launcher)
+    (stage / "img to 3D.bat").write_bytes(launcher)
     (stage / "imageto3d.bat").write_bytes(launcher)
+    (stage / "インストール.bat").write_bytes(_windows_installer())
     (stage / "install.ps1").write_text(_windows_shortcut_script(), encoding="utf-8-sig")
     (stage / "はじめにお読みください.txt").write_text(_windows_readme(), encoding="utf-8-sig")
 
@@ -265,8 +266,16 @@ def _windows_launcher() -> bytes:
     return (
         "@echo off\r\n"
         "cd /d \"%~dp0\"\r\n"
-        "powershell -NoProfile -ExecutionPolicy Bypass -File \"%~dp0install.ps1\"\r\n"
         "start \"\" \"%~dp0python\\pythonw.exe\" -m imageto3d\r\n"
+    ).encode("ascii")
+
+
+def _windows_installer() -> bytes:
+    return (
+        "@echo off\r\n"
+        "cd /d \"%~dp0\"\r\n"
+        "\"%~dp0python\\python.exe\" -m imageto3d install\r\n"
+        "if errorlevel 1 pause\r\n"
     ).encode("ascii")
 
 
@@ -276,13 +285,15 @@ def _windows_shortcut_script() -> str:
             "$root = Split-Path -Parent $MyInvocation.MyCommand.Path",
             "$menu = Join-Path $env:APPDATA \"Microsoft\\Windows\\Start Menu\\Programs\"",
             "New-Item -ItemType Directory -Force -Path $menu | Out-Null",
-            "$shortcut = Join-Path $menu \"画像から3D.lnk\"",
+            "$old = Join-Path $menu \"画像から3D.lnk\"",
+            "if (Test-Path $old) { Remove-Item -Force $old }",
+            "$shortcut = Join-Path $menu \"img to 3D.lnk\"",
             "$shell = New-Object -ComObject WScript.Shell",
             "$link = $shell.CreateShortcut($shortcut)",
             "$link.TargetPath = Join-Path $root \"python\\pythonw.exe\"",
             "$link.Arguments = \"-m imageto3d\"",
             "$link.WorkingDirectory = $root",
-            "$link.Description = \"写真をこのPCの中で立体モデルにします\"",
+            "$link.Description = \"img to 3D\"",
             "$link.Save()",
             "",
         ]
@@ -291,13 +302,14 @@ def _windows_shortcut_script() -> str:
 
 def _windows_readme() -> str:
     return (
-        "画像から3D（Windows 64bit）\n"
+        "img to 3D（Windows 64bit）\n"
         "\n"
         "1. このフォルダを好きな場所へ展開します。\n"
-        "2. 「画像から3D.bat」をダブルクリックします。\n"
+        "2. 「img to 3D.bat」をダブルクリックします。\n"
         "3. アプリのウィンドウが開きます。初回だけ、モデルを約140MB取得します。\n"
         "\n"
-        "スタートメニューにも「画像から3D」が追加されます。\n"
+        "スタートメニューへ入れるとき、またはすでに入っているときは「インストール.bat」を実行します。\n"
+        "入っている場合はファイルを上書きし、バージョンを上げます。アプリを開いただけではバージョンは変わりません。\n"
         "展開したフォルダは、ショートカットの先なので消さないでください。\n"
         "このパッケージは CPU で動作します。\n"
     )

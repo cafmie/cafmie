@@ -96,16 +96,23 @@ def test_windows_zip_starts_with_a_double_click_launcher(tmp_path):
     assert "#import site" not in pth
     assert "Lib\\site-packages" in pth
     assert (stage / "python" / "Lib" / "site-packages" / "imageto3d" / "__init__.py").is_file()
-    launcher = (stage / "画像から3D.bat").read_bytes()
+    launcher = (stage / "img to 3D.bat").read_bytes()
     assert launcher.startswith(b"@echo off\r\n")
     assert b"pythonw.exe" in launcher
+    assert b"install.ps1" not in launcher
     assert (stage / "imageto3d.bat").read_bytes() == launcher
+    installer = (stage / "インストール.bat").read_bytes()
+    assert b"python.exe\" -m imageto3d install" in installer
+    shortcut = (stage / "install.ps1").read_text(encoding="utf-8-sig")
+    assert "img to 3D.lnk" in shortcut
+    assert "画像から3D.lnk" in shortcut
 
     dest = tmp_path / "imageto3d-0.1.0-windows-amd64.zip"
     archive_windows(stage, dest)
     with zipfile.ZipFile(dest) as archive:
-        info = archive.getinfo("imageto3d-0.1.0-windows-amd64/画像から3D.bat")
+        info = archive.getinfo("imageto3d-0.1.0-windows-amd64/インストール.bat")
         assert info.flag_bits & 0x800
         readme = archive.read("imageto3d-0.1.0-windows-amd64/はじめにお読みください.txt")
     assert readme.startswith(b"\xef\xbb\xbf")
-    assert "画像から3D.bat" in readme.decode("utf-8-sig")
+    assert "img to 3D.bat" in readme.decode("utf-8-sig")
+    assert "インストール.bat" in readme.decode("utf-8-sig")

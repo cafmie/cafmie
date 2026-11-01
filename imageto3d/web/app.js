@@ -201,7 +201,7 @@ function showModel(data) {
 
 function paintInstall(data) {
   installText.textContent = data.message;
-  installButton.textContent = data.installed ? "インストールし直す" : "このPCにインストール";
+  installButton.textContent = data.installed ? "上書きして更新" : "このPCにインストール";
 }
 
 async function refreshInstall() {
