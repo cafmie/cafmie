@@ -2,7 +2,7 @@ FROM python:3.12-slim-bookworm
 
 LABEL org.opencontainers.image.source="https://github.com/cafmie/cafmie"
 LABEL org.opencontainers.image.description="写真をこのPCの中で立体モデルにします"
-LABEL org.opencontainers.image.version="0.1.0"
+LABEL org.opencontainers.image.version="0.1.1"
 
 WORKDIR /opt/imageto3d
 COPY pyproject.toml README.md MANIFEST.in ./

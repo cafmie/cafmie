@@ -122,6 +122,7 @@ def _install() -> int:
 
 def _launch_app(host: str, port: int) -> int:
     from .launch import (
+        APP_NAME,
         choose_listen_port,
         is_ready,
         open_app_window,
@@ -151,12 +152,12 @@ def _launch_app(host: str, port: int) -> int:
         else:
             if note:
                 print(note)
-            print("画像から3Dを起動しています")
+            print(f"{APP_NAME}を起動しています")
             server, thread = run_server(host, port)
             if not wait_until_ready(url):
                 stop_server(server, thread)
                 print(
-                    "起動できませんでした。開いている「画像から3D」を閉じてから、もう一度開いてください。",
+                    f"起動できませんでした。開いている「{APP_NAME}」を閉じてから、もう一度開いてください。",
                     file=sys.stderr,
                 )
                 return 1

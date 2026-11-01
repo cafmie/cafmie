@@ -151,3 +151,52 @@ def test_install_skips_toolchain_directories(monkeypatch, tmp_path):
     assert not (cargo / "imageto3d").exists()
     assert (user_bin / "imageto3d").is_symlink()
     assert (home / ".local" / "bin" / "imageto3d").is_symlink()
+
+
+def test_second_install_overwrites_and_raises_the_version(monkeypatch, tmp_path):
+    from imageto3d.installer import install, status
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setattr("imageto3d.installer.shutil.which", lambda name: None)
+
+    first = install()
+    version_file = tmp_path / ".local" / "share" / "imageto3d" / "version"
+    assert first["version"] == "0.1.1"
+    assert first["upgraded"] is False
+    assert "このPCにインストールしました。バージョンは 0.1.1 です。" in first["message"]
+    assert "img to 3D" in first["message"]
+    assert version_file.read_text(encoding="utf-8").strip() == "0.1.1"
+
+    second = install()
+    desktop = (tmp_path / ".local" / "share" / "applications" / "imageto3d.desktop").read_text(encoding="utf-8")
+    assert second["version"] == "0.1.2"
+    assert second["upgraded"] is True
+    assert "上書きしました。バージョンは 0.1.2 です。" in second["message"]
+    assert version_file.read_text(encoding="utf-8").strip() == "0.1.2"
+    assert "Name=img to 3D" in desktop
+    state = status()
+    assert state["installed"] is True
+    assert state["version"] == "0.1.2"
+    assert "インストール済みです（バージョン 0.1.2）" in state["message"]
+
+
+def test_legacy_menu_name_is_overwritten_and_raised_to_the_package_version(monkeypatch, tmp_path):
+    from imageto3d.installer import install, status
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setattr("imageto3d.installer.shutil.which", lambda name: None)
+    desktop = tmp_path / ".local" / "share" / "applications" / "imageto3d.desktop"
+    desktop.parent.mkdir(parents=True)
+    desktop.write_text("[Desktop Entry]\nName=画像から3D\nStartupWMClass=imageto3d\n", encoding="utf-8")
+
+    state = status()
+    assert state["installed"] is True
+    assert state["version"] == "0.1.0"
+    result = install()
+    assert result["upgraded"] is True
+    assert result["version"] == "0.1.1"
+    assert "上書きしました。バージョンは 0.1.1 です。" in result["message"]
+    assert "Name=img to 3D" in desktop.read_text(encoding="utf-8")
+    assert "Name=画像から3D" not in desktop.read_text(encoding="utf-8")

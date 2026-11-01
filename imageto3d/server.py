@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .bundle import save_bundle
 from .download import ensure_models, models_present
+from .launch import APP_NAME
 from .paths import WEB_DIR, output_dir
 from .pipeline import Settings, open_image, reconstruct
 
@@ -106,7 +107,7 @@ def create_app() -> FastAPI:
             threading.Thread(target=prepare_models, name="imageto3d-models", daemon=True).start()
         yield
 
-    app = FastAPI(title="画像から3D", docs_url=None, redoc_url=None, lifespan=lifespan)
+    app = FastAPI(title=APP_NAME, docs_url=None, redoc_url=None, lifespan=lifespan)
 
     @app.get("/")
     def index() -> FileResponse:

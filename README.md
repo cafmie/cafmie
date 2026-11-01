@@ -1,4 +1,4 @@
-# 画像から3D
+# img to 3D
 
 写真を1枚渡すと、このPCの中だけで立体の3Dモデルにします。ブラウザでプレビューして、GLB・STL・OBJ で保存できます。深度の推定と背景の切り抜きは、NVIDIA GPU があるときは CUDA で計算します。
 
@@ -36,18 +36,18 @@ python -m imageto3d package
 
 できるものは次のとおりです。
 
-- `imageto3d-0.1.0-py3-none-any.whl` … `pip install` 用
-- `imageto3d-0.1.0.tar.gz` … ソース
-- `imageto3d_0.1.0-1_amd64.deb` … Debian / Ubuntu 24.04（Python 3.12、64bit）向け
-- `imageto3d-0.1.0-windows-amd64.zip` … Windows 64bit 向け。展開して「画像から3D.bat」をダブルクリックします
+- `imageto3d-0.1.1-py3-none-any.whl` … `pip install` 用
+- `imageto3d-0.1.1.tar.gz` … ソース
+- `imageto3d_0.1.1-1_amd64.deb` … Debian / Ubuntu 24.04（Python 3.12、64bit）向け
+- `imageto3d-0.1.1-windows-amd64.zip` … Windows 64bit 向け。展開して「img to 3D.bat」をダブルクリックします
 
 `.deb` には CPU 版の依存ライブラリも入っています。入れるPCがオフラインでも、次でインストールできます。
 
 ```bash
-sudo dpkg -i dist/imageto3d_0.1.0-1_amd64.deb
+sudo dpkg -i dist/imageto3d_0.1.1-1_amd64.deb
 ```
 
-メニューの「画像から3D」と `/usr/bin/imageto3d` が入ります。モデル（およそ140MB）は初回起動時に取得します。NVIDIA GPU で推定するときは、入れたあとに CPU 版を外して GPU 版を入れます。
+メニューの「img to 3D」と `/usr/bin/imageto3d` が入ります。モデル（およそ140MB）は初回起動時に取得します。NVIDIA GPU で推定するときは、入れたあとに CPU 版を外して GPU 版を入れます。
 
 ```bash
 /opt/imageto3d/venv/bin/pip uninstall -y onnxruntime
@@ -56,13 +56,13 @@ sudo dpkg -i dist/imageto3d_0.1.0-1_amd64.deb
 
 GitHub の Packages に出ているコンテナイメージは Linux 用です。Windows 用の zip は Releases にあります。
 
-https://github.com/cafmie/cafmie/releases/download/v0.1.0/imageto3d-0.1.0-windows-amd64.zip
+https://github.com/cafmie/cafmie/releases/download/v0.1.1/imageto3d-0.1.1-windows-amd64.zip
 
 GitHub の Packages には、Linux 用のコンテナイメージを公開しています。
 
 ```bash
-docker pull ghcr.io/cafmie/imageto3d:0.1.0
-docker run --rm -p 7860:7860 ghcr.io/cafmie/imageto3d:0.1.0
+docker pull ghcr.io/cafmie/imageto3d:0.1.1
+docker run --rm -p 7860:7860 ghcr.io/cafmie/imageto3d:0.1.1
 ```
 
 ブラウザで `http://127.0.0.1:7860` を開きます。モデルはコンテナの中へ、初回起動時に取得します。
@@ -75,11 +75,13 @@ docker run --rm -p 7860:7860 ghcr.io/cafmie/imageto3d:0.1.0
 
 サーバーとウィンドウをまとめて開きます。アドレスバーのない一つのウィンドウになり、閉じると終了します。引数なしの `python -m imageto3d` も同じです。
 
-アプリの中の「このPCにインストール」からも、メニューの「画像から3D」と `imageto3d` コマンドを登録できます。コマンドから入れるときは次を一度だけ実行します。
+アプリの中の「このPCにインストール」からも、メニューの「img to 3D」と `imageto3d` コマンドを登録できます。すでに入っているときは同じ操作で上書きし、記録しているバージョンを上げます。コマンドから入れるときも同じです。
 
 ```bash
 python -m imageto3d install
 ```
+
+Windows の zip では「インストール.bat」が同じ処理をします。アプリを開く「img to 3D.bat」ではバージョンは変わりません。
 
 サーバーだけ起動して自分でブラウザを開くときは `python -m imageto3d serve` です。`--open` を付けると通常のブラウザが開きます。待受先を変えるときは `--host` と `--port` を使います。
 

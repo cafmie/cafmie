@@ -28,7 +28,7 @@ def test_health_and_index():
         assert health.json()["ok"] is True
         page = client.get("/")
         assert page.status_code == 200
-        assert "画像から3D" in page.text
+        assert "img to 3D" in page.text
         assert 'type="module"' in page.text
         assert "model-viewer.min.js" in page.text
         assert client.get("/style.css").status_code == 200

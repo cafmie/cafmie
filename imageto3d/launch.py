@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .paths import REPO_DIR, WEB_DIR
 
-APP_NAME = "画像から3D"
+APP_NAME = "img to 3D"
 _BROWSERS = (
     "google-chrome",
     "google-chrome-stable",
@@ -169,7 +169,7 @@ def choose_listen_port(host: str, port: int) -> tuple[int, str | None]:
     for candidate in range(port + 1, port + 21):
         if can_bind(host, candidate):
             return candidate, f"{port} は使用中のため、{candidate} で開きます。"
-    raise RuntimeError("空いているポートが見つかりません。開いている「画像から3D」を閉じてから、もう一度開いてください。")
+    raise RuntimeError(f"空いているポートが見つかりません。開いている「{APP_NAME}」を閉じてから、もう一度開いてください。")
 
 
 def open_app_window(url: str) -> subprocess.Popen[bytes] | None:

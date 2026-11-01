@@ -5,6 +5,7 @@ on:
     branches:
       - cursor/app-package-83e1
       - cursor/windows-package-83e1
+      - cursor/rename-upgrade-83e1
       - master
   workflow_dispatch:
 
@@ -31,12 +32,12 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/cafmie/imageto3d:0.1.0
+            ghcr.io/cafmie/imageto3d:0.1.1
             ghcr.io/cafmie/imageto3d:latest
           labels: |
             org.opencontainers.image.source=https://github.com/cafmie/cafmie
             org.opencontainers.image.description=写真をこのPCの中で立体モデルにします
-            org.opencontainers.image.version=0.1.0
+            org.opencontainers.image.version=0.1.1
 
       - name: Make the package public
         continue-on-error: true
@@ -68,11 +69,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          asset=dist/imageto3d-0.1.0-windows-amd64.zip
-          title="画像から3D 0.1.0"
-          notes="Windows 64bit 用です。zip を展開し、画像から3D.bat をダブルクリックします。Linux 用のイメージは Packages の ghcr.io/cafmie/imageto3d です。"
-          if gh release view v0.1.0 >/dev/null 2>&1; then
-            gh release upload v0.1.0 "$asset" --clobber
+          asset=dist/imageto3d-0.1.1-windows-amd64.zip
+          title="img to 3D 0.1.1"
+          notes="Windows 64bit 用です。zip を展開し、img to 3D.bat をダブルクリックします。すでに入っているときは インストール.bat で上書きし、バージョンを上げます。Linux 用のイメージは Packages の ghcr.io/cafmie/imageto3d です。"
+          if gh release view v0.1.1 >/dev/null 2>&1; then
+            gh release upload v0.1.1 "$asset" --clobber
           else
-            gh release create v0.1.0 "$asset" --title "$title" --notes "$notes"
+            gh release create v0.1.1 "$asset" --title "$title" --notes "$notes"
           fi
