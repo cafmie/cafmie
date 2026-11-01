@@ -148,11 +148,12 @@ def create_app() -> FastAPI:
         image: UploadFile = File(...),
         mode: str = Form("volume"),
         cutout: str = Form("true"),
-        resolution: int = Form(220),
+        resolution: int = Form(512),
         depth_scale: float = Form(0.22),
         inflate: float = Form(0.46),
         thickness: float = Form(0.08),
         smooth: float = Form(1.0),
+        detail: float = Form(0.85),
     ) -> JSONResponse:
         snapshot = _snapshot()
         if not snapshot["ready"]:
@@ -173,6 +174,7 @@ def create_app() -> FastAPI:
                 inflate=inflate,
                 thickness=thickness,
                 smooth=smooth,
+                detail=detail,
             ).clamped()
             result = reconstruct(picture, settings, on_status=lambda note: logger.info(note))
         except HTTPException:

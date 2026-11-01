@@ -40,8 +40,9 @@ def estimate_depth(image: Image.Image) -> np.ndarray:
     rgb = image.convert("RGB")
     width, height = rgb.size
     scale = 518.0 / min(width, height)
-    if max(width, height) * scale > 756:
-        scale *= 756.0 / (max(width, height) * scale)
+    # A longer side keeps fingers, hair, and small parts from dissolving into one blob.
+    if max(width, height) * scale > 1176:
+        scale *= 1176.0 / (max(width, height) * scale)
     resized = rgb.resize((_snap(width * scale), _snap(height * scale)), Image.Resampling.BICUBIC)
     array = np.asarray(resized).astype(np.float32) / 255.0
     array = (array - _MEAN) / _STD

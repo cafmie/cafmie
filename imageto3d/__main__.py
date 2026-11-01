@@ -65,11 +65,12 @@ def main(argv: list[str] | None = None) -> int:
     convert.add_argument("-o", "--output", type=Path, required=True, help=".glb / .stl / .obj / .zip")
     convert.add_argument("--mode", choices=("volume", "relief"), default="volume")
     convert.add_argument("--no-cutout", action="store_true")
-    convert.add_argument("--resolution", type=int, default=220)
+    convert.add_argument("--resolution", type=int, default=512)
     convert.add_argument("--depth-scale", type=float, default=0.22)
     convert.add_argument("--inflate", type=float, default=0.46)
     convert.add_argument("--thickness", type=float, default=0.08)
     convert.add_argument("--smooth", type=float, default=1.0)
+    convert.add_argument("--detail", type=float, default=0.85, help="写真のきめを表面の凹凸にする強さ")
 
     sub.add_parser("download-models", help="深度モデルと切り抜きモデルを取得する")
     sub.add_parser("install", help="このPCのアプリメニューとコマンドにインストールする")
@@ -262,6 +263,7 @@ def _convert(args) -> int:
                 inflate=args.inflate,
                 thickness=args.thickness,
                 smooth=args.smooth,
+                detail=args.detail,
             ),
             on_status=print,
         )
