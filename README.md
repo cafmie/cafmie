@@ -34,11 +34,12 @@ NVIDIA ドライバが入っている必要があります。CUDA のライブ�
 python -m imageto3d package
 ```
 
-できるものは三つです。
+できるものは次のとおりです。
 
 - `imageto3d-0.1.0-py3-none-any.whl` … `pip install` 用
 - `imageto3d-0.1.0.tar.gz` … ソース
 - `imageto3d_0.1.0-1_amd64.deb` … Debian / Ubuntu 24.04（Python 3.12、64bit）向け
+- `imageto3d-0.1.0-windows-amd64.zip` … Windows 64bit 向け。展開して「画像から3D.bat」をダブルクリックします
 
 `.deb` には CPU 版の依存ライブラリも入っています。入れるPCがオフラインでも、次でインストールできます。
 
@@ -53,7 +54,11 @@ sudo dpkg -i dist/imageto3d_0.1.0-1_amd64.deb
 /opt/imageto3d/venv/bin/pip install onnxruntime-gpu
 ```
 
-GitHub の Packages には、同じツールのコンテナイメージを公開しています。
+GitHub の Packages に出ているコンテナイメージは Linux 用です。Windows 用の zip は Releases にあります。
+
+https://github.com/cafmie/cafmie/releases/download/v0.1.0/imageto3d-0.1.0-windows-amd64.zip
+
+GitHub の Packages には、Linux 用のコンテナイメージを公開しています。
 
 ```bash
 docker pull ghcr.io/cafmie/imageto3d:0.1.0

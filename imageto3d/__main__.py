@@ -122,8 +122,10 @@ def _install() -> int:
 
 def _launch_app(host: str, port: int) -> int:
     from .launch import (
+        choose_listen_port,
         is_ready,
         open_app_window,
+        open_fallback_browser,
         run_server,
         stop_server,
         wait_until_ready,
@@ -132,20 +134,45 @@ def _launch_app(host: str, port: int) -> int:
     sample = WEB_DIR / "sample.png"
     if not sample.is_file():
         write_sample(sample)
-    url = f"http://{host}:{port}"
     server = None
     thread = None
-    if is_ready(url):
+    if is_ready(f"http://{host}:{port}"):
+        url = f"http://{host}:{port}"
         print(f"すでに起動しています: {url}")
     else:
-        print("画像から3Dを起動しています")
-        server, thread = run_server(host, port)
-        if not wait_until_ready(url):
-            print(f"起動できませんでした: {url}", file=sys.stderr)
-            stop_server(server, thread)
+        try:
+            port, note = choose_listen_port(host, port)
+        except RuntimeError as error:
+            print(str(error), file=sys.stderr)
             return 1
-        print(f"開いています: {url}")
+        url = f"http://{host}:{port}"
+        if is_ready(url):
+            print(f"すでに起動しています: {url}")
+        else:
+            if note:
+                print(note)
+            print("画像から3Dを起動しています")
+            server, thread = run_server(host, port)
+            if not wait_until_ready(url):
+                stop_server(server, thread)
+                print(
+                    "起動できませんでした。開いている「画像から3D」を閉じてから、もう一度開いてください。",
+                    file=sys.stderr,
+                )
+                return 1
+            print(f"開いています: {url}")
     window = open_app_window(url)
+    if window is None and open_fallback_browser(url):
+        print(f"ブラウザで開いています: {url}")
+        if server is None:
+            return 0
+        try:
+            while thread.is_alive():
+                thread.join(timeout=0.4)
+        except KeyboardInterrupt:
+            pass
+        stop_server(server, thread)
+        return 0
     if window is None:
         print("表示できるブラウザが見つかりません。上のアドレスを開いてください。")
         if server is None:
