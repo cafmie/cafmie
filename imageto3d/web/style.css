@@ -129,29 +129,51 @@ main {
   cursor: pointer;
 }
 
-.drop input {
+.drop-copy {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 180px;
+  position: relative;
+  text-align: center;
+  padding: 24px;
+}
+
+.drop-copy input {
   position: absolute;
   inset: 0;
   opacity: 0;
   cursor: pointer;
 }
 
-.drop img {
+.frame {
+  position: relative;
+  width: 100%;
+}
+
+.frame img {
   width: 100%;
   height: 210px;
   object-fit: contain;
   background: #e7dfd2;
-  display: none;
+  display: block;
 }
 
-.drop.has-image img { display: block; }
+#objectLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
 .drop.has-image .drop-copy { display: none; }
 .drop.has-image { border-style: solid; }
 
-.drop-copy {
-  text-align: center;
-  padding: 24px;
-}
+.frame[hidden],
+#objectLayer[hidden],
+#replace[hidden],
+.objects[hidden] { display: none; }
 
 .drop-copy strong {
   display: block;
@@ -176,6 +198,45 @@ main {
   font-size: 13px;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.credit {
+  margin: 0 2px 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.credit a { color: var(--muted); }
+
+.objects p {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.object-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.object-choices button {
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.object-choices button[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
 }
 
 .modes {
