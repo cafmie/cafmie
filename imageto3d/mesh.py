@@ -26,13 +26,16 @@ def build_mesh(
     inflate: float = 0.32,
     thickness: float = 0.08,
     smooth: float = 1.0,
+    detail: float = 0.85,
 ) -> trimesh.Trimesh:
     if mode not in {"volume", "relief"}:
         raise ValueError("mode は volume か relief です")
 
     depth_s, mask_s = _resize_fields(depth, mask, int(resolution))
     height, width = mask_s.shape
-    sigma = float(max(smooth, 0.0))
+    # The slider is a fraction of the subject. Scale it so a denser mesh does not
+    # leave the depth model's faint bands as bright ridges.
+    sigma = float(max(smooth, 0.0)) * max(height, width) / 220.0
     hard = mask_s > 0.5
     if hard.any():
         filled = depth_s.copy()
@@ -75,7 +78,11 @@ def build_mesh(
         base = max(float(thickness), 0.005)
         front_height = base * subject + relief
         back_height = np.zeros_like(relief)
-    texture = _texture(image, mask)
+    if float(detail) > 0:
+        fine = _photo_detail(image, height, width)
+        fine = np.where(boundary, 0.0, fine)
+        front_height = front_height + fine * dome * (float(detail) * 0.045 * subject)
+    texture = _texture(image, mask, limit=2048)
     return _solid(texture, valid, boundary, front_height, back_height)
 
 
@@ -101,7 +108,31 @@ def _normalize(depth: np.ndarray, valid: np.ndarray) -> np.ndarray:
     return np.clip((depth - low) / (high - low), 0.0, 1.0).astype(np.float32)
 
 
-def _texture(image: Image.Image | np.ndarray, mask: np.ndarray, limit: int = 1024) -> Image.Image:
+def _photo_detail(image: Image.Image | np.ndarray, height: int, width: int) -> np.ndarray:
+    """High-frequency brightness from the photo, as a unitless bump map."""
+
+    if isinstance(image, Image.Image):
+        gray = np.asarray(image.convert("L"), dtype=np.float32) / 255.0
+    else:
+        values = np.asarray(image)
+        if values.ndim == 2:
+            gray = values.astype(np.float32)
+        else:
+            rgb = values[..., :3].astype(np.float32)
+            gray = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
+        if float(np.nanmax(gray)) > 1.5:
+            gray = gray / 255.0
+    resized = Image.fromarray(gray.astype(np.float32), mode="F").resize((width, height), Image.Resampling.LANCZOS)
+    luma = np.asarray(resized, dtype=np.float32)
+    # Only the finest grain. Broader shading is already in the depth, and keeping
+    # it here turns a smooth apple into contour ridges.
+    high = luma - gaussian_filter(luma, sigma=0.7)
+    # Smooth shading leaves a tiny residual. Amplifying that draws contour lines.
+    high = np.where(np.abs(high) < 0.02, 0.0, high)
+    return np.clip(high * 6.0, -1.0, 1.0).astype(np.float32)
+
+
+def _texture(image: Image.Image | np.ndarray, mask: np.ndarray, limit: int = 2048) -> Image.Image:
     """High-resolution texture with a solid-color strip for the unseen back."""
 
     if isinstance(image, Image.Image):
@@ -189,9 +220,10 @@ def _solid(
     texcoord = np.asarray(uvs, dtype=np.float32)
     front_faces = _quads(front_id)
     back_faces = _quads(back_id, reverse=True)
-    # Low-pass the outline before the side wall is cut, so the rim follows one curve.
-    points = _smooth_outline(points, front_faces, radius=8)
-    points = _smooth_outline(points, front_faces, radius=8)
+    # Enough low-pass to hide pixel stairs on the rim, short enough to keep small parts.
+    long_side = max(height, width)
+    radius = 6 if long_side >= 240 else 8
+    points = _smooth_outline(points, front_faces, radius=radius, mix=0.65)
     front_to_back = _front_to_back(front_id, back_id, len(points))
     grid_count = len(points)
     wall_faces, points, texcoord, wall_normals = _walls(
@@ -410,7 +442,12 @@ def _directed_boundary(faces: np.ndarray) -> np.ndarray:
     return edges[starts[single]].astype(np.int32)
 
 
-def _smooth_outline(points: np.ndarray, front_faces: np.ndarray, radius: int = 5) -> np.ndarray:
+def _smooth_outline(
+    points: np.ndarray,
+    front_faces: np.ndarray,
+    radius: int = 5,
+    mix: float = 0.8,
+) -> np.ndarray:
     """Low-pass the real silhouette so pixel stairs stop catching the light."""
 
     if len(front_faces) == 0 or radius < 1:
@@ -439,7 +476,7 @@ def _smooth_outline(points: np.ndarray, front_faces: np.ndarray, radius: int = 5
         for index in range(count):
             samples = [xy[(index + offset) % count] for offset in range(-radius, radius + 1)]
             smoothed[index] = np.mean(samples, axis=0)
-        mixed = xy * 0.2 + smoothed * 0.8
+        mixed = xy * (1.0 - mix) + smoothed * mix
         points[indices, 0] = mixed[:, 0]
         points[indices, 1] = mixed[:, 1]
         # The back vertex is stored immediately after its front partner.

@@ -40,6 +40,9 @@ def test_health_and_index():
         assert body["gpu"] is False
         assert body["device"] is None
         assert 'id="installButton"' in page.text
+        assert "サンプルのお城で試す" in page.text
+        assert 'id="objects"' in page.text
+        assert client.get("/sample.jpg").status_code == 200
         install = client.get("/api/install")
         assert install.status_code == 200
         assert "installed" in install.json()
